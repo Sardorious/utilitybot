@@ -47,7 +47,7 @@ def pdf_to_word(pdf_path: str, output_docx_path: str) -> bool:
             images = convert_from_path(pdf_path, output_folder=temp_dir)
             
             for i, img in enumerate(images):
-                text = pytesseract.image_to_string(img, lang='uzb+rus+eng')
+                text = pytesseract.image_to_string(img, lang='uzb+rus+eng+tur')
                 if text.strip():
                     doc.add_paragraph(text.strip())
                 
