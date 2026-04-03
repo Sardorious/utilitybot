@@ -2,7 +2,7 @@ aiogram==3.4.1
 python-dotenv==1.0.1
 rarfile==4.1
 pytesseract
-pdf2image
+PyMuPDF
 python-docx
 docx2pdf==0.1.8
 Pillow==10.2.0

@@ -36,25 +36,30 @@ def pdf_to_word(pdf_path: str, output_docx_path: str) -> bool:
     Extracts text to plain string and saves it handling UTF-8.
     """
     try:
-        from pdf2image import convert_from_path
+        import fitz
         import pytesseract
+        from PIL import Image
         from docx import Document
-        import tempfile
+        import os
 
         doc = Document()
+        pdf_document = fitz.open(pdf_path)
         
-        with tempfile.TemporaryDirectory() as temp_dir:
-            images = convert_from_path(pdf_path, output_folder=temp_dir)
+        for page_num in range(len(pdf_document)):
+            page = pdf_document.load_page(page_num)
+            pix = page.get_pixmap()
             
-            for i, img in enumerate(images):
-                text = pytesseract.image_to_string(img, lang='uzb+rus+eng+tur')
-                if text.strip():
-                    doc.add_paragraph(text.strip())
+            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+            
+            text = pytesseract.image_to_string(img, lang='uzb+rus+eng+tur')
+            if text.strip():
+                doc.add_paragraph(text.strip())
+            
+            if page_num < len(pdf_document) - 1:
+                doc.add_page_break()
                 
-                if i < len(images) - 1:
-                    doc.add_page_break()
-                    
         doc.save(output_docx_path)
+        pdf_document.close()
         return os.path.exists(output_docx_path)
     except Exception as e:
         print(f"Error converting PDF to Word with OCR: {e}")
