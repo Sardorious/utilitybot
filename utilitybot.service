@@ -1,0 +1,13 @@
+[Unit]
+Description=Telegram Utility Bot
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=/path/to/UtilityBot
+ExecStart=/path/to/UtilityBot/venv/bin/python bot.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
