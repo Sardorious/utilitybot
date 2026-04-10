@@ -1,0 +1,43 @@
+name: Deploy Utility Bot
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Execute deployment commands via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          # You will need to add these secrets in your GitHub repository settings:
+          # Settings -> Secrets and variables -> Actions -> New repository secret
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USERNAME }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }} # usually 22
+          
+          # Replace 'YOUR_FOLDER_PATH_HERE' with your actual directory path on the server
+          script: |
+            APP_DIR="YOUR_FOLDER_PATH_HERE"
+            
+            echo "Moving to application directory: $APP_DIR"
+            cd $APP_DIR
+            
+            echo "Pulling latest changes from GitHub..."
+            git pull origin main
+            
+            echo "Activating virtual environment and updating dependencies..."
+            source venv/bin/activate
+            # Ensure safe pip installation
+            pip install -r requirements.txt
+            
+            echo "Restarting the utilitybot service..."
+            # Adjust the service name if different
+            sudo systemctl restart utilitybot.service
+            
+            echo "Deployment completed successfully!"
