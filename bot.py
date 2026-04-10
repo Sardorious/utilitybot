@@ -9,7 +9,7 @@ from aiogram.filters import Command
 from aiogram.types import FSInputFile
 
 from utils.archive import rar_to_zip
-from utils.converter import word_to_pdf, pdf_to_word
+from utils.converter import word_to_pdf, pdf_to_word, md_to_pdf
 from utils.image import compress_image
 
 load_dotenv()
@@ -58,7 +58,8 @@ async def cmd_start(message: types.Message):
         "1️⃣ RAR arxivni ZIP qilib beraman (.rar yuboring)\n"
         "2️⃣ Word hujjatini PDF qilib beraman (.docx yuboring)\n"
         "3️⃣ PDF hujjatini Word qilib beraman (.pdf yuboring)\n"
-        "4️⃣ Rasm o'lchamini kichraytiraman (Rasm yuboring)\n\n"
+        "4️⃣ Rasm o'lchamini kichraytiraman (Rasm yuboring)\n"
+        "5️⃣ Markdown hujjatini PDF qilib beraman (.md yuboring)\n\n"
         "Faylni yuboring va mos keladigan ishni bajarib beraman!"
     )
 
@@ -107,12 +108,16 @@ async def handle_document(message: types.Message):
         task_name = "PDF to Word"
         input_ext, output_ext = ".pdf", ".docx"
         func = pdf_to_word
+    elif file_name.endswith('.md'):
+        task_name = "Markdown to PDF"
+        input_ext, output_ext = ".md", ".pdf"
+        func = md_to_pdf
     elif file_name.endswith('.jpg') or file_name.endswith('.png') or file_name.endswith('.jpeg'):
         task_name = "Image Compress"
         input_ext, output_ext = os.path.splitext(file_name)[1], "_compressed.jpg"
         func = lambda i, o: compress_image(i, o, 60)
     else:
-        await wait_msg.edit_text("🤷‍♂️ Ushbu fayl turini qo'llab-quvvatlamayman. Iltimos, faqat qo'llab-quvvatlanadigan fayllarni (rar, docx, pdf, rasmlar) yuboring.")
+        await wait_msg.edit_text("🤷‍♂️ Ushbu fayl turini qo'llab-quvvatlamayman. Iltimos, faqat qo'llab-quvvatlanadigan fayllarni (rar, docx, pdf, md, rasmlar) yuboring.")
         return
         
     await wait_msg.edit_text(f"⏳ Fayl qabul qilindi. Jarayon bajarilmoqda: {task_name}...")

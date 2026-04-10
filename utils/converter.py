@@ -64,3 +64,42 @@ def pdf_to_word(pdf_path: str, output_docx_path: str) -> bool:
     except Exception as e:
         print(f"Error converting PDF to Word with OCR: {e}")
         return False
+
+def md_to_pdf(md_path: str, output_pdf_path: str) -> bool:
+    """
+    Converts a Markdown (.md) file to a PDF file.
+    """
+    try:
+        import markdown
+        from xhtml2pdf import pisa
+        
+        with open(md_path, 'r', encoding='utf-8') as f:
+            md_content = f.read()
+            
+        html_content = markdown.markdown(md_content, extensions=['extra', 'codehilite', 'tables'])
+        
+        css = """
+        <style>
+            @page { margin: 2cm; }
+            body { font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #333; }
+            h1, h2, h3, h4, h5, h6 { color: #222; margin-top: 1.5em; margin-bottom: 0.5em; }
+            code { font-family: "Courier New", Courier, monospace; background-color: #f8f9fa; padding: 2px 4px; border-radius: 4px; font-size: 0.9em; }
+            pre { background-color: #f8f9fa; padding: 12px; border-radius: 4px; white-space: pre-wrap; font-family: "Courier New", Courier, monospace; font-size: 0.9em; border: 1px solid #e9ecef; }
+            blockquote { border-left: 4px solid #adb5bd; padding-left: 15px; color: #6c757d; font-style: italic; margin-left: 0; }
+            table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
+            th, td { border: 1px solid #dee2e6; padding: 8px; text-align: left; }
+            th { background-color: #e9ecef; font-weight: bold; }
+            a { color: #0d6efd; text-decoration: none; }
+            img { max-width: 100%; height: auto; }
+            hr { border: 0; border-top: 1px solid #eee; margin: 20px 0; }
+        </style>
+        """
+        full_html = f"<html><head>{css}</head><body>{html_content}</body></html>"
+        
+        with open(output_pdf_path, "w+b") as result_file:
+            pisa_status = pisa.CreatePDF(full_html, dest=result_file)
+            
+        return not pisa_status.err
+    except Exception as e:
+        print(f"Error converting Markdown to PDF: {e}")
+        return False
