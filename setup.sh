@@ -9,10 +9,9 @@ sudo apt-get install -y libreoffice unrar python3 python3-venv python3-pip tesse
 
 echo "Creating python virtual environment..."
 python3 -m venv venv
-source venv/bin/activate
 
 echo "Installing Python dependencies..."
-pip install -r requirements.txt
+venv/bin/pip install -r requirements.txt
 
 echo "============================"
 echo "Setup complete!"

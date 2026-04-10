@@ -31,10 +31,8 @@ jobs:
             echo "Pulling latest changes from GitHub..."
             git pull origin main
             
-            echo "Activating virtual environment and updating dependencies..."
-            source venv/bin/activate
-            # Ensure safe pip installation
-            pip install -r requirements.txt
+            echo "Updating dependencies..."
+            venv/bin/pip install -r requirements.txt
             
             echo "Restarting the utilitybot service..."
             # Adjust the service name if different

@@ -7,6 +7,5 @@ if [ ! -d "venv" ]; then
     exit 1
 fi
 
-# Activate venv and run the bot
-source venv/bin/activate
-python3 bot.py
+# Run the bot
+venv/bin/python bot.py
