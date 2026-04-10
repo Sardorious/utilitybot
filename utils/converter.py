@@ -72,26 +72,34 @@ def md_to_pdf(md_path: str, output_pdf_path: str) -> bool:
     try:
         import markdown
         from xhtml2pdf import pisa
+        import os
         
         with open(md_path, 'r', encoding='utf-8') as f:
             md_content = f.read()
             
         html_content = markdown.markdown(md_content, extensions=['extra', 'codehilite', 'tables'])
         
-        css = """
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        font_path = os.path.join(script_dir, "fonts", "DejaVuSans.ttf").replace('\\', '/')
+        
+        css = f"""
         <style>
-            @page { margin: 2cm; }
-            body { font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #333; }
-            h1, h2, h3, h4, h5, h6 { color: #222; margin-top: 1.5em; margin-bottom: 0.5em; }
-            code { font-family: "Courier New", Courier, monospace; background-color: #f8f9fa; padding: 2px 4px; border-radius: 4px; font-size: 0.9em; }
-            pre { background-color: #f8f9fa; padding: 12px; border-radius: 4px; white-space: pre-wrap; font-family: "Courier New", Courier, monospace; font-size: 0.9em; border: 1px solid #e9ecef; }
-            blockquote { border-left: 4px solid #adb5bd; padding-left: 15px; color: #6c757d; font-style: italic; margin-left: 0; }
-            table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
-            th, td { border: 1px solid #dee2e6; padding: 8px; text-align: left; }
-            th { background-color: #e9ecef; font-weight: bold; }
-            a { color: #0d6efd; text-decoration: none; }
-            img { max-width: 100%; height: auto; }
-            hr { border: 0; border-top: 1px solid #eee; margin: 20px 0; }
+            @font-face {{
+                font-family: 'DejaVuSans';
+                src: url('{font_path}');
+            }}
+            @page {{ margin: 2cm; }}
+            body {{ font-family: 'DejaVuSans', Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #333; }}
+            h1, h2, h3, h4, h5, h6 {{ font-family: 'DejaVuSans'; color: #222; margin-top: 1.5em; margin-bottom: 0.5em; }}
+            code {{ font-family: "Courier New", Courier, monospace; background-color: #f8f9fa; padding: 2px 4px; border-radius: 4px; font-size: 0.9em; }}
+            pre {{ background-color: #f8f9fa; padding: 12px; border-radius: 4px; white-space: pre-wrap; font-family: "Courier New", Courier, monospace; font-size: 0.9em; border: 1px solid #e9ecef; }}
+            blockquote {{ font-family: 'DejaVuSans'; border-left: 4px solid #adb5bd; padding-left: 15px; color: #6c757d; font-style: italic; margin-left: 0; }}
+            table {{ font-family: 'DejaVuSans'; border-collapse: collapse; width: 100%; margin-bottom: 20px; }}
+            th, td {{ font-family: 'DejaVuSans'; border: 1px solid #dee2e6; padding: 8px; text-align: left; }}
+            th {{ background-color: #e9ecef; font-weight: bold; }}
+            a {{ color: #0d6efd; text-decoration: none; }}
+            img {{ max-width: 100%; height: auto; }}
+            hr {{ border: 0; border-top: 1px solid #eee; margin: 20px 0; }}
         </style>
         """
         full_html = f"<html><head>{css}</head><body>{html_content}</body></html>"
