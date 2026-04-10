@@ -107,8 +107,8 @@ def md_to_pdf(md_path: str, output_pdf_path: str) -> bool:
             @page {{ margin: 2cm; }}
             body {{ font-family: 'Roboto', Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #333; }}
             h1, h2, h3, h4, h5, h6 {{ font-family: 'Roboto'; color: #222; margin-top: 1.5em; margin-bottom: 0.5em; }}
-            code {{ font-family: "Courier New", Courier, monospace; background-color: #f8f9fa; padding: 2px 4px; border-radius: 4px; font-size: 0.9em; }}
-            pre {{ background-color: #f8f9fa; padding: 12px; border-radius: 4px; white-space: pre-wrap; font-family: "Courier New", Courier, monospace; font-size: 0.9em; border: 1px solid #e9ecef; }}
+            code {{ font-family: 'Roboto', monospace; background-color: #f8f9fa; padding: 2px 4px; border-radius: 4px; font-size: 0.9em; }}
+            pre {{ background-color: #f8f9fa; padding: 12px; border-radius: 4px; white-space: pre-wrap; font-family: 'Roboto', monospace; font-size: 0.9em; border: 1px solid #e9ecef; }}
             blockquote {{ font-family: 'Roboto'; border-left: 4px solid #adb5bd; padding-left: 15px; color: #6c757d; font-style: italic; margin-left: 0; }}
             table {{ font-family: 'Roboto'; border-collapse: collapse; width: 100%; margin-bottom: 20px; }}
             th, td {{ font-family: 'Roboto'; border: 1px solid #dee2e6; padding: 8px; text-align: left; }}
