@@ -77,6 +77,15 @@ def md_to_pdf(md_path: str, output_pdf_path: str) -> bool:
         with open(md_path, 'r', encoding='utf-8') as f:
             md_content = f.read()
             
+        import base64, zlib, re
+        def replacer(match):
+            mermaid_code = match.group(1).strip()
+            compressed = zlib.compress(mermaid_code.encode('utf-8'), 9)
+            b64 = base64.urlsafe_b64encode(compressed).decode('ascii')
+            return f"![Mermaid Diagram](https://kroki.io/mermaid/png/{b64})"
+            
+        md_content = re.sub(r'```mermaid\s*\n(.*?)\n```', replacer, md_content, flags=re.DOTALL | re.IGNORECASE)
+            
         html_content = markdown.markdown(md_content, extensions=['extra', 'codehilite', 'tables'])
         
         script_dir = os.path.dirname(os.path.abspath(__file__))
