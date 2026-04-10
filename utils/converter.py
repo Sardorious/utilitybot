@@ -80,7 +80,14 @@ def md_to_pdf(md_path: str, output_pdf_path: str) -> bool:
         html_content = markdown.markdown(md_content, extensions=['extra', 'codehilite', 'tables'])
         
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        font_path = os.path.join(script_dir, "fonts", "DejaVuSans.ttf").replace('\\', '/')
+        font_dir = os.path.join(script_dir, "fonts")
+        font_path = os.path.join(font_dir, "DejaVuSans.ttf").replace('\\', '/')
+        
+        if not os.path.exists(font_path):
+            import urllib.request
+            os.makedirs(font_dir, exist_ok=True)
+            font_url = "https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans.ttf"
+            urllib.request.urlretrieve(font_url, font_path)
         
         css = f"""
         <style>
