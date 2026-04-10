@@ -81,28 +81,28 @@ def md_to_pdf(md_path: str, output_pdf_path: str) -> bool:
         
         script_dir = os.path.dirname(os.path.abspath(__file__))
         font_dir = os.path.join(script_dir, "fonts")
-        font_path = os.path.join(font_dir, "DejaVuSans.ttf").replace('\\', '/')
+        font_path = os.path.join(font_dir, "Roboto-Regular.ttf").replace('\\', '/')
         
         if not os.path.exists(font_path):
             import urllib.request
             os.makedirs(font_dir, exist_ok=True)
-            font_url = "https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans.ttf"
+            font_url = "https://github.com/googlefonts/roboto/raw/main/src/hinted/Roboto-Regular.ttf"
             urllib.request.urlretrieve(font_url, font_path)
         
         css = f"""
         <style>
             @font-face {{
-                font-family: 'DejaVuSans';
+                font-family: 'Roboto';
                 src: url('{font_path}');
             }}
             @page {{ margin: 2cm; }}
-            body {{ font-family: 'DejaVuSans', Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #333; }}
-            h1, h2, h3, h4, h5, h6 {{ font-family: 'DejaVuSans'; color: #222; margin-top: 1.5em; margin-bottom: 0.5em; }}
+            body {{ font-family: 'Roboto', Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #333; }}
+            h1, h2, h3, h4, h5, h6 {{ font-family: 'Roboto'; color: #222; margin-top: 1.5em; margin-bottom: 0.5em; }}
             code {{ font-family: "Courier New", Courier, monospace; background-color: #f8f9fa; padding: 2px 4px; border-radius: 4px; font-size: 0.9em; }}
             pre {{ background-color: #f8f9fa; padding: 12px; border-radius: 4px; white-space: pre-wrap; font-family: "Courier New", Courier, monospace; font-size: 0.9em; border: 1px solid #e9ecef; }}
-            blockquote {{ font-family: 'DejaVuSans'; border-left: 4px solid #adb5bd; padding-left: 15px; color: #6c757d; font-style: italic; margin-left: 0; }}
-            table {{ font-family: 'DejaVuSans'; border-collapse: collapse; width: 100%; margin-bottom: 20px; }}
-            th, td {{ font-family: 'DejaVuSans'; border: 1px solid #dee2e6; padding: 8px; text-align: left; }}
+            blockquote {{ font-family: 'Roboto'; border-left: 4px solid #adb5bd; padding-left: 15px; color: #6c757d; font-style: italic; margin-left: 0; }}
+            table {{ font-family: 'Roboto'; border-collapse: collapse; width: 100%; margin-bottom: 20px; }}
+            th, td {{ font-family: 'Roboto'; border: 1px solid #dee2e6; padding: 8px; text-align: left; }}
             th {{ background-color: #e9ecef; font-weight: bold; }}
             a {{ color: #0d6efd; text-decoration: none; }}
             img {{ max-width: 100%; height: auto; }}
