@@ -101,5 +101,13 @@ def md_to_pdf(md_path: str, output_pdf_path: str) -> bool:
             
         return not pisa_status.err
     except Exception as e:
+        import logging
+        import traceback
+        logging.getLogger().error(f"Error in md_to_pdf: {e}\n{traceback.format_exc()}")
+        try:
+            with open("errors.log", "a", encoding="utf-8") as f:
+                f.write(f"MD2PDF ERR: {e}\n{traceback.format_exc()}\n")
+        except:
+            pass
         print(f"Error converting Markdown to PDF: {e}")
         return False
