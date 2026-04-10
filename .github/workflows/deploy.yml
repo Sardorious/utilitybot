@@ -23,7 +23,7 @@ jobs:
           
           # Replace 'YOUR_FOLDER_PATH_HERE' with your actual directory path on the server
           script: |
-            APP_DIR="YOUR_FOLDER_PATH_HERE"
+            APP_DIR="~/utilitybot"
             
             echo "Moving to application directory: $APP_DIR"
             cd $APP_DIR
