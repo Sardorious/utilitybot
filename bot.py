@@ -28,10 +28,13 @@ console_handler.setLevel(logging.INFO)
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
-file_handler = logging.FileHandler('errors.log', encoding='utf-8')
-file_handler.setLevel(logging.ERROR)
+file_handler = logging.FileHandler('activity.log', encoding='utf-8')
+file_handler.setLevel(logging.INFO)
 file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
+
+# Global semaphore to limit heavy processing to ONE at a time
+process_semaphore = asyncio.Semaphore(1)
 
 # Initialize bot and dispatcher
 bot = Bot(token=BOT_TOKEN)
@@ -113,36 +116,49 @@ async def cmd_start(message: types.Message):
 
 @dp.message(F.photo)
 async def handle_photo(message: types.Message):
-    wait_msg = await message.answer("⏳ Rasm qabul qilindi. Qayta ishlash boshlandi...")
-    
     # Eng katta rasmni olish
     photo = message.photo[-1]
     input_path = generate_temp_path(".jpg")
     output_path = generate_temp_path("_compressed.jpg")
     
+    wait_msg = None
     try:
-        await bot.download(photo, destination=input_path)
+        if process_semaphore.locked():
+            status_msg = await message.answer("⏳ Navbatda turibsiz... Hozirda boshqa vazifa bajarilmoqda.")
         
-        progress_callback = get_progress_callback(
-            wait_msg,
-            "Rasm siqilmoqda...",
-            {0: "🖼️ Rasm yuklanmoqda...", 40: "🎨 Hajmi kichraytirilmoqda...", 100: "✅ Tayyorlanmoqda..."}
-        )
-        
-        # Alohida thread'da siqish
-        success = await asyncio.to_thread(compress_image, input_path, output_path, 60, progress_callback)
-        
-        if success:
-            await wait_msg.edit_text("✅ Rasm muvaffaqiyatli siqildi! Sizga yuborilmoqda...")
-            result_file = FSInputFile(output_path)
-            await message.reply_photo(result_file, caption="✅ Siqilgan rasm.")
-        else:
-            await wait_msg.edit_text("❌ Kechirasiz, rasmni qayta ishlashda xatolik yuz berdi.")
+        async with process_semaphore:
+            if 'status_msg' in locals(): await status_msg.delete()
+            wait_msg = await message.answer("⏳ Rasm qabul qilindi. Qayta ishlash boshlandi...")
+            
+            logging.info(f"Starting photo compression for user {message.from_user.id}")
+            await bot.download(photo, destination=input_path)
+            
+            progress_callback = get_progress_callback(
+                wait_msg,
+                "Rasm siqilmoqda...",
+                {0: "🖼️ Rasm yuklanmoqda...", 40: "🎨 Hajmi kichraytirilmoqda...", 100: "✅ Tayyorlanmoqda..."}
+            )
+            
+            # Alohida thread'da siqish
+            success = await asyncio.to_thread(compress_image, input_path, output_path, 60, progress_callback)
+            
+            if success:
+                logging.info(f"Photo compression success for user {message.from_user.id}")
+                await wait_msg.edit_text("✅ Rasm muvaffaqiyatli siqildi! Sizga yuborilmoqda...")
+                result_file = FSInputFile(output_path)
+                await message.reply_photo(result_file, caption="✅ Siqilgan rasm.")
+            else:
+                logging.error(f"Photo compression failed for user {message.from_user.id}")
+                await wait_msg.edit_text("❌ Kechirasiz, rasmni qayta ishlashda xatolik yuz berdi.")
     except Exception as e:
         logging.error(f"Error handling photo: {e}")
-        await message.answer("❌ Kechirasiz, rasmni qayta ishlashda kutilmagan xatolik yuz berdi.")
+        if wait_msg: await wait_msg.edit_text("❌ Kechirasiz, rasmni qayta ishlashda kutilmagan xatolik yuz berdi.")
+        else: await message.answer("❌ Kechirasiz, kutilmagan xatolik yuz berdi.")
     finally:
         clean_up(input_path, output_path)
+        if wait_msg:
+            try: await wait_msg.delete()
+            except: pass
 
 @dp.message(F.document)
 async def handle_document(message: types.Message):
@@ -150,7 +166,6 @@ async def handle_document(message: types.Message):
     file_name = document.file_name.lower()
     extension = os.path.splitext(file_name)[1]
     
-    wait_msg = await message.answer("⏳ Fayl yuklab olinmoqda...")
     
     # Determine the task
     if extension == '.rar':
@@ -176,51 +191,63 @@ async def handle_document(message: types.Message):
     base_name = os.path.splitext(document.file_name)[0]
     output_path = os.path.join(TEMP_DIR, f"{base_name}{output_ext}")
     
+    wait_msg = None
     try:
-        await bot.download(document, destination=input_path)
-        
-        if extension == '.docx':
-            progress_callback = get_progress_callback(
-                wait_msg, "Hujjat o'tkazilmoqda...", 
-                {0: "📄 Word yuklanmoqda...", 40: "🔄 PDF'ga o'tkazilmoqda...", 100: "✅ Tayyorlanmoqda..."}
-            )
-            success = await asyncio.to_thread(word_to_pdf, input_path, output_path, progress_callback)
-            caption = "📄 Word'dan PDF'ga o'tkazildi."
+        if process_semaphore.locked():
+            status_msg = await message.answer("⏳ Navbatda turibsiz... Hozirda boshqa vazifa bajarilmoqda.")
+
+        async with process_semaphore:
+            if 'status_msg' in locals(): await status_msg.delete()
+            wait_msg = await message.answer(f"⏳ Fayl qabul qilindi. Jarayon bajarilmoqda: {task_name}...")
             
-        elif extension == '.pdf':
-            progress_callback = get_progress_callback(
-                wait_msg, "Hujjat OCR qilinmoqda...", 
-                {0: "📄 PDF yuklanmoqda...", 10: "🔍 Matn tanib olinmoqda (OCR)...", 100: "✅ Tayyorlanmoqda..."}
-            )
-            success = await asyncio.to_thread(pdf_to_word, input_path, output_path, progress_callback)
-            caption = "📄 PDF'dan Word'ga (OCR) o'tkazildi."
+            logging.info(f"Starting {task_name} for user {message.from_user.id}: {document.file_name}")
+            await bot.download(document, destination=input_path)
             
-        elif extension == '.md':
-            progress_callback = get_progress_callback(
-                wait_msg, "Hujjat o'tkazilmoqda...", 
-                {0: "📝 Markdown yuklanmoqda...", 40: "📊 Diagrammalar chizilmoqda...", 90: "🔄 PDF'ga o'tkazilmoqda...", 100: "✅ Tayyorlanmoqda..."}
-            )
-            success = await asyncio.to_thread(md_to_pdf, input_path, output_path, progress_callback)
-            caption = "📝 Markdown'dan PDF'ga o'tkazildi."
+            if extension == '.docx':
+                progress_callback = get_progress_callback(
+                    wait_msg, "Hujjat o'tkazilmoqda...", 
+                    {0: "📄 Word yuklanmoqda...", 40: "🔄 PDF'ga o'tkazilmoqda...", 100: "✅ Tayyorlanmoqda..."}
+                )
+                success = await asyncio.to_thread(word_to_pdf, input_path, output_path, progress_callback)
+                caption = "📄 Word'dan PDF'ga o'tkazildi."
+                
+            elif extension == '.pdf':
+                progress_callback = get_progress_callback(
+                    wait_msg, "Hujjat OCR qilinmoqda...", 
+                    {0: "📄 PDF yuklanmoqda...", 10: "🔍 Matn tanib olinmoqda (OCR)...", 100: "✅ Tayyorlanmoqda..."}
+                )
+                success = await asyncio.to_thread(pdf_to_word, input_path, output_path, progress_callback)
+                caption = "📄 PDF'dan Word'ga (OCR) o'tkazildi."
+                
+            elif extension == '.md':
+                progress_callback = get_progress_callback(
+                    wait_msg, "Hujjat o'tkazilmoqda...", 
+                    {0: "📝 Markdown yuklanmoqda...", 40: "📊 Diagrammalar chizilmoqda...", 90: "🔄 PDF'ga o'tkazilmoqda...", 100: "✅ Tayyorlanmoqda..."}
+                )
+                success = await asyncio.to_thread(md_to_pdf, input_path, output_path, progress_callback)
+                caption = "📝 Markdown'dan PDF'ga o'tkazildi."
+                
+            elif extension == '.rar':
+                progress_callback = get_progress_callback(
+                    wait_msg, "Arxiv o'tkazilmoqda...", 
+                    {0: "📦 RAR yuklanmoqda...", 20: "🔓 Ochilmoqda...", 50: "🤐 ZIP'ga siqilmoqda...", 100: "✅ Tayyorlanmoqda..."}
+                )
+                success = await asyncio.to_thread(rar_to_zip, input_path, output_path, progress_callback)
+                caption = "📦 RAR'dan ZIP'ga o'tkazildi."
             
-        elif extension == '.rar':
-            progress_callback = get_progress_callback(
-                wait_msg, "Arxiv o'tkazilmoqda...", 
-                {0: "📦 RAR yuklanmoqda...", 20: "🔓 Ochilmoqda...", 50: "🤐 ZIP'ga siqilmoqda...", 100: "✅ Tayyorlanmoqda..."}
-            )
-            success = await asyncio.to_thread(rar_to_zip, input_path, output_path, progress_callback)
-            caption = "📦 RAR'dan ZIP'ga o'tkazildi."
-        
-        if success:
-            await wait_msg.edit_text("✅ Jarayon muvaffaqiyatli yakunlandi! Fayl yuborilmoqda...")
-            result_file = FSInputFile(output_path)
-            await message.reply_document(result_file, caption=caption)
-        else:
-            await wait_msg.edit_text("❌ Kechirasiz, faylni qayta ishlashda xatolik yuz berdi. Bu fayl buzilgan yoki qo'llab-quvvatlanmaydigan xususiyatlarga ega bo'lishi mumkin.")
+            if success:
+                logging.info(f"{task_name} success for user {message.from_user.id}")
+                await wait_msg.edit_text("✅ Jarayon muvaffaqiyatli yakunlandi! Fayl yuborilmoqda...")
+                result_file = FSInputFile(output_path)
+                await message.reply_document(result_file, caption=caption)
+            else:
+                logging.error(f"{task_name} failed for user {message.from_user.id}")
+                await wait_msg.edit_text("❌ Kechirasiz, faylni qayta ishlashda xatolik yuz berdi. Bu fayl buzilgan yoki qo'llab-quvvatlanmaydigan xususiyatlarga ega bo'lishi mumkin.")
     
     except Exception as e:
         logging.error(f"Error handling task: {e}")
-        await wait_msg.edit_text(f"❌ Kutilmagan xatolik yuz berdi.")
+        if wait_msg: await wait_msg.edit_text(f"❌ Kutilmagan xatolik yuz berdi.")
+        else: await message.answer(f"❌ Kutilmagan xatolik yuz berdi.")
     finally:
         clean_up(input_path, output_path)
 
@@ -234,26 +261,39 @@ async def handle_text(message: types.Message):
         
         output_path = generate_temp_path(".mp3")
         
+        wait_msg = None
         try:
-            progress_callback = get_progress_callback(
-                wait_msg, 
-                "YouTube audiosi qayta ishlanmoqda...",
-                {0: "⬇️ Yuklab olinmoqda...", 30: "⚙️ Tozalanmoqda...", 100: "✅ Tayyorlanmoqda..."}
-            )
+            if process_semaphore.locked():
+                status_msg = await message.answer("⏳ Navbatda turibsiz... Hozirda boshqa vazifa bajarilmoqda.")
 
-            # CPU va vaqt talab qiladigan jarayonni alohida thread'da ishga tushirish
-            final_path = await asyncio.to_thread(process_video, text, output_path, "mp3", 0.6, progress_callback)
-            
-            if final_path and os.path.exists(final_path):
-                await wait_msg.edit_text("✅ Audio mufavaqqiyatli tozalab tayyorlandi! Sizga yuborilmoqda...")
-                result_file = FSInputFile(final_path)
-                await message.reply_audio(result_file, caption="✅ Orqa fon shovqinlaridan tozalangan audio.")
-            else:
-                await wait_msg.edit_text("❌ Kechirasiz, audioni tozalashda xatolik yuz berdi.")
+            async with process_semaphore:
+                if 'status_msg' in locals(): await status_msg.delete()
+                wait_msg = await message.answer("⏳ YouTube havolasi qabul qilindi. Audio yuklab olinib tozalanishi boshlandi...\nBu jarayon video uzunligiga qarab bir necha daqiqa vaqt olishi mumkin.")
+                
+                logging.info(f"Starting YouTube audio process for user {message.from_user.id}: {text}")
+                
+                progress_callback = get_progress_callback(
+                    wait_msg, 
+                    "YouTube audiosi qayta ishlanmoqda...",
+                    {0: "⬇️ Yuklab olinmoqda...", 30: "⚙️ Tozalanmoqda...", 100: "✅ Tayyorlanmoqda..."}
+                )
+
+                # CPU va vaqt talab qiladigan jarayonni alohida thread'da ishga tushirish
+                final_path = await asyncio.to_thread(process_video, text, output_path, "mp3", 0.6, progress_callback)
+                
+                if final_path and os.path.exists(final_path):
+                    logging.info(f"YouTube success for user {message.from_user.id}")
+                    await wait_msg.edit_text("✅ Audio mufavaqqiyatli tozalab tayyorlandi! Sizga yuborilmoqda...")
+                    result_file = FSInputFile(final_path)
+                    await message.reply_audio(result_file, caption="✅ Orqa fon shovqinlaridan tozalangan audio.")
+                else:
+                    logging.error(f"YouTube process failed for user {message.from_user.id}")
+                    await wait_msg.edit_text("❌ Kechirasiz, audioni tozalashda xatolik yuz berdi.")
         
         except Exception as e:
             logging.error(f"Error handling youtube audio: {e}")
-            await wait_msg.edit_text("❌ Kechirasiz, audioni qayta ishlashda kutilmagan xatolik yuz berdi.")
+            if wait_msg: await wait_msg.edit_text("❌ Kechirasiz, audioni qayta ishlashda kutilmagan xatolik yuz berdi.")
+            else: await message.answer("❌ Kechirasiz, kutilmagan xatolik yuz berdi.")
         finally:
             clean_up(output_path)
 

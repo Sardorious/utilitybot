@@ -19,6 +19,7 @@ import argparse
 import os
 import sys
 import io
+import logging
 
 # Majburiy UTF-8 kodlash (Windows terminallarida emoji chiqarish uchun)
 if sys.stdout.encoding.lower() != 'utf-8':
@@ -342,8 +343,8 @@ def process_chunk(audio: np.ndarray, sr: int, noise_strength: float) -> np.ndarr
 def process_long_video(raw_path: str, sr: int, noise_strength: float, progress_callback=None) -> np.ndarray:
     """
     Uzun videolarni bo'laklab (chunk) qayta ishlash.
-    Har bir bo'lak alohida tozalanadi va keyin birlashtiriladi.
-    Xotirani tejaydi va progress ko'rsatadi.
+    Har bir bo'lak alohida tozalanadi, diskka saqlanadi va keyin birlashtiriladi.
+    Bu VPS xotirasini (RAM) tejaydi.
     """
     total_duration = get_audio_duration(raw_path)
     chunk_duration = CHUNK_DURATION_SEC
@@ -354,74 +355,84 @@ def process_long_video(raw_path: str, sr: int, noise_strength: float, progress_c
     step = chunk_duration - overlap
     num_chunks = max(1, int(np.ceil((total_duration - overlap) / step)))
     
+    logging.info(f"Long video processing started: {num_chunks} chunks, total {total_duration:.1f}s")
     print(f"\n📐 Bo'laklab qayta ishlash rejasi:")
     print(f"   📏 Umumiy davomiylik: {format_time(total_duration)}")
     print(f"   🧩 Bo'lak hajmi: {format_time(chunk_duration)}")
     print(f"   🔢 Bo'laklar soni: {num_chunks}")
     print(f"   🔗 Overlap: {overlap} soniya")
     
-    result_audio = np.array([], dtype=np.float32)
+    chunk_files = []
     start_time = time.time()
     
-    for i in range(num_chunks):
-        chunk_start = i * step
-        chunk_len = min(chunk_duration, total_duration - chunk_start)
-        
-        if chunk_len <= 0:
-            break
-        
-        elapsed = time.time() - start_time
-        if i > 0:
-            avg_per_chunk = elapsed / i
-            remaining = avg_per_chunk * (num_chunks - i)
-            eta_str = f" | ⏱️ Taxminan: {format_time(remaining)} qoldi"
-        else:
-            eta_str = ""
-        
-        print(f"\n   ┌─ 🧩 Bo'lak [{i+1}/{num_chunks}] "
-              f"({format_time(chunk_start)} — {format_time(chunk_start + chunk_len)})"
-              f"{eta_str}")
-        
-        # Bo'lakni yuklash (faqat kerakli qismini)
-        chunk = load_audio_chunk(raw_path, chunk_start, chunk_len, sr)
-        
-        if len(chunk) == 0:
-            print(f"   └─ ⚠️  Bo'sh bo'lak, o'tkazildi")
-            continue
-        
-        mem_mb = chunk.nbytes / (1024 * 1024)
-        print(f"   │  📦 Xotira: {mem_mb:.1f} MB")
-        
-        # Bo'lakni tozalash
-        processed = process_chunk(chunk, sr, noise_strength)
-        
-        # Xotirani bo'shatish
-        del chunk
-        
-        # Natijaga qo'shish (crossfade bilan)
-        if len(result_audio) == 0:
-            result_audio = processed
-        else:
-            result_audio = crossfade(result_audio, processed, overlap_samples)
-        
-        del processed
-        
-        progress = (i + 1) / num_chunks * 100
-        print(f"   └─ ✅ Tayyor ({progress:.0f}%)")
-        
-        if progress_callback:
-            # Cleaning phase is 30% to 90%
-            current_total_progress = 30 + (progress * 0.6)
-            progress_callback(current_total_progress)
-    
-    total_time = time.time() - start_time
-    print(f"\n⏱️  Tozalash vaqti: {format_time(total_time)}")
-    
-    return result_audio
+    try:
+        for i in range(num_chunks):
+            chunk_start = i * step
+            chunk_len = min(chunk_duration, total_duration - chunk_start)
+            
+            if chunk_len <= 0:
+                break
+            
+            # Progress reporting BEFORE starting chunk
+            progress_pct = (i / num_chunks) * 100
+            if progress_callback:
+                current_total_progress = 30 + (progress_pct * 0.6)
+                # Ensure we move past 30% immediately
+                if i == 0: current_total_progress = 31
+                progress_callback(current_total_progress)
 
+            logging.info(f"Processing chunk {i+1}/{num_chunks} ({format_time(chunk_start)})")
+            
+            # Bo'lakni yuklash
+            chunk = load_audio_chunk(raw_path, chunk_start, chunk_len, sr)
+            if len(chunk) == 0:
+                continue
+            
+            # Bo'lakni tozalash
+            processed = process_chunk(chunk, sr, noise_strength)
+            del chunk
+            
+            # Diskka vaqtinchalik saqlash (RAMni tejash uchun)
+            temp_chunk_path = f"{raw_path}_chunk_{i}.wav"
+            sf.write(temp_chunk_path, processed, sr, subtype='PCM_16')
+            chunk_files.append(temp_chunk_path)
+            del processed
+            
+            logging.info(f"Chunk {i+1}/{num_chunks} saved to disk")
+            print(f"   └─ ✅ Bo'lak {i+1} tayyor")
+
+        # Barcha bo'laklarni birlashtirish
+        logging.info("Merging chunks from disk...")
+        result_audio = np.array([], dtype=np.float32)
+        
+        for idx, cf in enumerate(chunk_files):
+            processed, _ = sf.read(cf, dtype='float32')
+            if len(result_audio) == 0:
+                result_audio = processed
+            else:
+                result_audio = crossfade(result_audio, processed, overlap_samples)
+            
+            # Merge progress (90-95%)
+            if progress_callback:
+                merge_progress = 90 + (idx / len(chunk_files) * 5)
+                progress_callback(merge_progress)
+            
+            os.remove(cf) # Faylni o'chirish
+
+        total_time = time.time() - start_time
+        logging.info(f"Processing finished in {total_time:.1f}s")
+        return result_audio
+
+    except Exception as e:
+        logging.error(f"Error in process_long_video: {e}")
+        # Clean up temp files on error
+        for cf in chunk_files:
+            if os.path.exists(cf): os.remove(cf)
+        raise e
 
 def save_audio(audio: np.ndarray, sr: int, output_path: str, fmt: str = "mp3"):
     """Audio faylni saqlash"""
+    logging.info(f"Saving final audio to {output_path} (Format: {fmt})")
     print(f"\n💾 Fayl saqlanmoqda: {output_path}")
     
     # Avval WAV sifatida saqlash

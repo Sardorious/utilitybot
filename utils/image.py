@@ -8,6 +8,7 @@ def compress_image(input_image_path: str, output_image_path: str, quality: int =
     质量 (quality) parameter reduces file size (default 60).
     """
     try:
+        logging.info(f"Starting image compression: {input_image_path} (Quality: {quality})")
         if progress_callback: progress_callback(20)
         with Image.open(input_image_path) as img:
             if progress_callback: progress_callback(40)

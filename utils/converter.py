@@ -11,6 +11,7 @@ def word_to_pdf(docx_path: str, output_pdf_path: str, progress_callback=None) ->
     On Linux it uses LibreOffice CLI (requires libreoffice to be installed).
     """
     try:
+        logging.info(f"Starting Word to PDF conversion: {docx_path}")
         if progress_callback: progress_callback(20)
         if sys.platform == "win32":
             from docx2pdf import convert
@@ -18,9 +19,27 @@ def word_to_pdf(docx_path: str, output_pdf_path: str, progress_callback=None) ->
             return os.path.exists(output_pdf_path)
         else:
             outdir = os.path.dirname(output_pdf_path)
+            # Use a temporary user profile for LibreOffice to avoid profile locks/hangs in service mode
+            profile_dir = os.path.join(outdir, f"lo_profile_{os.getpid()}")
+            os.makedirs(profile_dir, exist_ok=True)
+            
+            cmd = [
+                'libreoffice', 
+                '--headless', 
+                f'-env:UserInstallation=file://{profile_dir}', 
+                '--convert-to', 'pdf', 
+                docx_path, 
+                '--outdir', outdir
+            ]
+            
+            logging.info(f"Running LibreOffice with Profile: {profile_dir}")
             if progress_callback: progress_callback(40)
             subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             if progress_callback: progress_callback(80)
+            
+            # Clean up temp profile
+            try: shutil.rmtree(profile_dir)
+            except: pass
             
             base_name = os.path.splitext(os.path.basename(docx_path))[0]
             generated_pdf = os.path.join(outdir, f"{base_name}.pdf")
@@ -40,6 +59,7 @@ def pdf_to_word(pdf_path: str, output_docx_path: str, progress_callback=None) ->
     Extracts text to plain string and saves it handling UTF-8.
     """
     try:
+        logging.info(f"Starting PDF to Word (OCR) conversion: {pdf_path}")
         if progress_callback: progress_callback(10)
         import fitz
         import pytesseract
@@ -50,8 +70,10 @@ def pdf_to_word(pdf_path: str, output_docx_path: str, progress_callback=None) ->
         doc = Document()
         pdf_document = fitz.open(pdf_path)
         total_pages = len(pdf_document)
+        logging.info(f"PDF loaded: {total_pages} pages found")
         
         for page_num in range(total_pages):
+            logging.info(f"Processing page {page_num + 1}/{total_pages}")
             page = pdf_document.load_page(page_num)
             pix = page.get_pixmap()
             
@@ -81,6 +103,7 @@ def md_to_pdf(md_path: str, output_pdf_path: str, progress_callback=None) -> boo
     Converts a Markdown (.md) file to a PDF file.
     """
     try:
+        logging.info(f"Starting Markdown to PDF conversion: {md_path}")
         if progress_callback: progress_callback(10)
         import markdown
         from xhtml2pdf import pisa
