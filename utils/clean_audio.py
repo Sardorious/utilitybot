@@ -63,6 +63,7 @@ def check_ffmpeg():
         raise RuntimeError(
             "FFmpeg topilmadi!\n"
             "FFmpeg o'rnating:\n"
+            "Ubuntu/Linux: sudo apt update && sudo apt install ffmpeg\n"
             "Windows: winget install FFmpeg\n"
             "yoki: https://ffmpeg.org/download.html"
         )
