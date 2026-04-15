@@ -165,8 +165,38 @@ async def handle_text(message: types.Message):
         output_path = generate_temp_path(".mp3")
         
         try:
+            loop = asyncio.get_running_loop()
+            last_percent = -10 # To Ensure first update at 0%
+            
+            def progress_callback(percent: float):
+                nonlocal last_percent
+                # Update every 10%
+                if percent >= last_percent + 10 or percent >= 100:
+                    last_percent = int(percent // 10) * 10
+                    loop.call_soon_threadsafe(
+                        lambda: asyncio.create_task(update_progress_ui(wait_msg, last_percent))
+                    )
+
+            async def update_progress_ui(msg: types.Message, percent: int):
+                bar_length = 10
+                filled = int(percent / 10)
+                bar = "■" * filled + "□" * (bar_length - filled)
+                status_text = "⬇️ Yuklab olinmoqda..." if percent < 30 else "⚙️ Tozalanmoqda..."
+                if percent >= 100: status_text = "✅ Tayyorlanmoqda..."
+                
+                new_text = (
+                    f"⏳ YouTube audiosi qayta ishlanmoqda...\n\n"
+                    f"[{bar}] {percent}%\n"
+                    f"{status_text}\n\n"
+                    f"Bu video uzunligiga qarab bir necha daqiqa vaqt olishi mumkin."
+                )
+                try:
+                    await msg.edit_text(new_text)
+                except Exception:
+                    pass # Ignore if message is already deleted or identical
+
             # CPU va vaqt talab qiladigan jarayonni alohida thread'da ishga tushirish
-            final_path = await asyncio.to_thread(process_video, text, output_path, "mp3", 0.6)
+            final_path = await asyncio.to_thread(process_video, text, output_path, "mp3", 0.6, progress_callback)
             
             if final_path and os.path.exists(final_path):
                 await wait_msg.edit_text("✅ Audio mufavaqqiyatli tozalab tayyorlandi! Sizga yuborilmoqda...")

@@ -42,6 +42,7 @@ import noisereduce as nr
 import pyloudnorm as pyln
 from pydub import AudioSegment
 from scipy.signal import butter, sosfilt
+import yt_dlp
 
 
 # ─── Konfiguratsiya ─────────────────────────────────────────────────────
@@ -82,37 +83,41 @@ def format_time(seconds: float) -> str:
         return f"{h} soat {m} daqiqa"
 
 
-def download_audio(url: str, output_dir: str) -> str:
+def download_audio(url: str, output_dir: str, progress_callback=None) -> str:
     """YouTube'dan audio yuklab olish"""
     print("\n📥 YouTube'dan audio yuklab olinmoqda...")
     
     output_template = os.path.join(output_dir, "raw_audio.%(ext)s")
     
-    cmd = [
-        sys.executable, "-m", "yt_dlp",
-        "--extract-audio",
-        "--audio-format", "wav",
-        "--audio-quality", "0",  # Eng yuqori sifat
-        "--output", output_template,
-        "--no-playlist",         # Faqat bitta video
-        "--progress",
-        url
-    ]
+    def ydl_progress_hook(d):
+        if d['status'] == 'downloading' and progress_callback:
+            try:
+                p = d.get('_percent_str', '0%').replace('%','')
+                percent = float(p)
+                # Download phase is 0% to 30% of total
+                progress_callback(percent * 0.3)
+            except:
+                pass
+
+    ydl_opts = {
+        'format': 'bestaudio/best',
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'wav',
+            'preferredquality': '0',
+        }],
+        'outtmpl': output_template,
+        'noplaylist': True,
+        'progress_hooks': [ydl_progress_hook],
+        'quiet': True,
+        'no_warnings': True,
+    }
     
     try:
-        subprocess.run(cmd, check=True, capture_output=False)
-    except FileNotFoundError:
-        raise FileNotFoundError(
-            f"yt-dlp topilmadi!\n"
-            f"Interpreter: {sys.executable}\n"
-            f"O'rnating: {sys.executable} -m pip install yt-dlp"
-        )
-    except subprocess.CalledProcessError as e:
-        raise RuntimeError(
-            f"Yuklab olishda xatolik!\n"
-            f"Komanda: {' '.join(cmd)}\n"
-            f"Xatolik: {str(e)}"
-        )
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
+    except Exception as e:
+        raise RuntimeError(f"Yuklab olishda xatolik: {e}")
     
     # Yuklab olingan faylni topish
     for f in os.listdir(output_dir):
@@ -334,7 +339,7 @@ def process_chunk(audio: np.ndarray, sr: int, noise_strength: float) -> np.ndarr
     return audio
 
 
-def process_long_video(raw_path: str, sr: int, noise_strength: float) -> np.ndarray:
+def process_long_video(raw_path: str, sr: int, noise_strength: float, progress_callback=None) -> np.ndarray:
     """
     Uzun videolarni bo'laklab (chunk) qayta ishlash.
     Har bir bo'lak alohida tozalanadi va keyin birlashtiriladi.
@@ -403,6 +408,11 @@ def process_long_video(raw_path: str, sr: int, noise_strength: float) -> np.ndar
         
         progress = (i + 1) / num_chunks * 100
         print(f"   └─ ✅ Tayyor ({progress:.0f}%)")
+        
+        if progress_callback:
+            # Cleaning phase is 30% to 90%
+            current_total_progress = 30 + (progress * 0.6)
+            progress_callback(current_total_progress)
     
     total_time = time.time() - start_time
     print(f"\n⏱️  Tozalash vaqti: {format_time(total_time)}")
@@ -462,7 +472,7 @@ def get_video_title(url: str) -> str:
 
 
 def process_video(url: str, output_path: str = None, fmt: str = "mp3",
-                  noise_strength: float = NOISE_REDUCE_STRENGTH):
+                  noise_strength: float = NOISE_REDUCE_STRENGTH, progress_callback=None):
     """
     Asosiy jarayon — YouTube videoni yuklab olib, tozalash.
     Uzun videolar avtomatik ravishda bo'laklab qayta ishlanadi.
@@ -488,7 +498,7 @@ def process_video(url: str, output_path: str = None, fmt: str = "mp3",
     # Vaqtinchalik papka
     with tempfile.TemporaryDirectory() as tmpdir:
         # 1. YouTube'dan audio yuklab olish
-        raw_path = download_audio(url, tmpdir)
+        raw_path = download_audio(url, tmpdir, progress_callback)
         
         # Audio davomiyligini tekshirish
         duration = get_audio_duration(raw_path)
@@ -501,13 +511,14 @@ def process_video(url: str, output_path: str = None, fmt: str = "mp3",
                   f"bo'laklab rejim: >{format_time(LONG_VIDEO_THRESHOLD)})")
             
             # Bo'laklab tozalash
-            audio = process_long_video(raw_path, SAMPLE_RATE, noise_strength)
+            audio = process_long_video(raw_path, SAMPLE_RATE, noise_strength, progress_callback)
             sr = SAMPLE_RATE
             
             # Umumiy normalizatsiya va limiter
             print(f"\n📊 Umumiy ovoz normallashtirilmoqda...")
             audio = normalize_loudness(audio, sr)
             audio = apply_limiter(audio)
+            if progress_callback: progress_callback(90)
             
         else:
             # ═══ QISQA VIDEO — oddiy rejim ═══
@@ -519,21 +530,25 @@ def process_video(url: str, output_path: str = None, fmt: str = "mp3",
             # 3. Chastota filtri
             print("\n🔧 Chastota filtri qo'llanmoqda...")
             audio = apply_bandpass_filter(audio, sr)
+            if progress_callback: progress_callback(40)
             print(f"   ✅ Oraliq: {HIGHPASS_FREQ} Hz — {LOWPASS_FREQ} Hz")
             
             # 4. Shovqin kamaytirish
             print(f"\n🔇 Shovqin kamaytirilmoqda (kuch: {noise_strength:.0%})...")
             audio = reduce_noise(audio, sr, noise_strength)
+            if progress_callback: progress_callback(60)
             print("   ✅ Shovqin kamaytirildi")
             
             # 5. Nutq kuchaytirish
             print("\n🎤 Nutq tozalanmoqda...")
             audio = enhance_voice(audio, sr)
+            if progress_callback: progress_callback(80)
             print("   ✅ Nutq kuchaytirildi")
             
             # 6. Ovoz balandligini normallashtirish
             print(f"\n📊 Ovoz balandligi normallashtirilmoqda (maqsad: {TARGET_LOUDNESS} LUFS)...")
             audio = normalize_loudness(audio, sr)
+            if progress_callback: progress_callback(90)
             meter = pyln.Meter(sr)
             new_loudness = meter.integrated_loudness(audio)
             if not np.isinf(new_loudness):
@@ -546,6 +561,7 @@ def process_video(url: str, output_path: str = None, fmt: str = "mp3",
         
         # 8. Saqlash
         final_path = save_audio(audio, sr, output_path, fmt)
+        if progress_callback: progress_callback(100)
     
     total_elapsed = time.time() - total_start
     
