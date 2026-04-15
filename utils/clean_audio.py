@@ -89,7 +89,7 @@ def download_audio(url: str, output_dir: str) -> str:
     output_template = os.path.join(output_dir, "raw_audio.%(ext)s")
     
     cmd = [
-        "yt-dlp",
+        sys.executable, "-m", "yt_dlp",
         "--extract-audio",
         "--audio-format", "wav",
         "--audio-quality", "0",  # Eng yuqori sifat
@@ -103,11 +103,16 @@ def download_audio(url: str, output_dir: str) -> str:
         subprocess.run(cmd, check=True, capture_output=False)
     except FileNotFoundError:
         raise FileNotFoundError(
-            "yt-dlp topilmadi!\n"
-            "O'rnating: pip install yt-dlp"
+            f"yt-dlp topilmadi!\n"
+            f"Interpreter: {sys.executable}\n"
+            f"O'rnating: {sys.executable} -m pip install yt-dlp"
         )
     except subprocess.CalledProcessError as e:
-        raise RuntimeError(f"Yuklab olishda xatolik: {e}")
+        raise RuntimeError(
+            f"Yuklab olishda xatolik!\n"
+            f"Komanda: {' '.join(cmd)}\n"
+            f"Xatolik: {str(e)}"
+        )
     
     # Yuklab olingan faylni topish
     for f in os.listdir(output_dir):
@@ -445,7 +450,7 @@ def get_video_title(url: str) -> str:
     """YouTube video sarlavhasini olish"""
     try:
         result = subprocess.run(
-            ["yt-dlp", "--get-title", "--no-playlist", url],
+            [sys.executable, "-m", "yt_dlp", "--get-title", "--no-playlist", url],
             capture_output=True, text=True, timeout=15
         )
         title = result.stdout.strip()
