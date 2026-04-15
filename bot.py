@@ -182,11 +182,9 @@ async def handle_document(message: types.Message):
         task_name = "Markdown to PDF"
         output_ext = ".pdf"
     else:
-        await wait_msg.edit_text("🤷‍♂️ Ushbu fayl turini qo'llab-quvvatlamayman. Iltimos, faqat qo'llab-quvvatlanadigan fayllarni (rar, docx, pdf, md, rasmlar) yuboring.")
+        await message.answer("🤷‍♂️ Ushbu fayl turini qo'llab-quvvatlamayman. Iltimos, faqat qo'llab-quvvatlanadigan fayllarni (rar, docx, pdf, md, rasmlar) yuborig.")
         return
         
-    await wait_msg.edit_text(f"⏳ Fayl qabul qilindi. Jarayon bajarilmoqda: {task_name}...")
-    
     input_path = generate_temp_path(extension)
     base_name = os.path.splitext(document.file_name)[0]
     output_path = os.path.join(TEMP_DIR, f"{base_name}{output_ext}")
