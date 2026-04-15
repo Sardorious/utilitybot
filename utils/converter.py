@@ -14,42 +14,64 @@ def word_to_pdf(docx_path: str, output_pdf_path: str, progress_callback=None) ->
     try:
         logging.info(f"Starting Word to PDF conversion: {docx_path}")
         if progress_callback: progress_callback(20)
+        
+        abs_docx = os.path.abspath(docx_path)
+        abs_pdf = os.path.abspath(output_pdf_path)
+        outdir = os.path.dirname(abs_pdf)
+        
         if sys.platform == "win32":
             from docx2pdf import convert
-            convert(docx_path, output_pdf_path)
-            return os.path.exists(output_pdf_path)
+            convert(abs_docx, abs_pdf)
+            return os.path.exists(abs_pdf)
         else:
-            outdir = os.path.dirname(output_pdf_path)
             # Use a temporary user profile for LibreOffice to avoid profile locks/hangs in service mode
-            profile_dir = os.path.join(outdir, f"lo_profile_{os.getpid()}")
+            # IMPORTANT: Path must be absolute for -env:UserInstallation
+            profile_dir = os.path.abspath(os.path.join(outdir, f"lo_profile_{os.getpid()}"))
             os.makedirs(profile_dir, exist_ok=True)
             
             cmd = [
                 'libreoffice', 
                 '--headless', 
+                '--nologo',
+                '--nodefault',
+                '--norestore',
+                '--nolockcheck',
                 f'-env:UserInstallation=file://{profile_dir}', 
                 '--convert-to', 'pdf', 
-                docx_path, 
+                abs_docx, 
                 '--outdir', outdir
             ]
             
             logging.info(f"Running LibreOffice with Profile: {profile_dir}")
             if progress_callback: progress_callback(40)
-            subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            
+            try:
+                # Add a timeout to prevent hanging the whole bot queue
+                result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60)
+                logging.info("LibreOffice command completed successfully")
+            except subprocess.TimeoutExpired:
+                logging.error(f"LibreOffice conversion timed out after 60 seconds: {abs_docx}")
+                return False
+            except subprocess.CalledProcessError as e:
+                error_msg = e.stderr.decode('utf-8', errors='replace')
+                logging.error(f"LibreOffice failed with error: {error_msg}")
+                return False
+            finally:
+                # Clean up temp profile
+                try: shutil.rmtree(profile_dir)
+                except Exception as e: 
+                    logging.warning(f"Could not clean up LO profile {profile_dir}: {e}")
+            
             if progress_callback: progress_callback(80)
             
-            # Clean up temp profile
-            try: shutil.rmtree(profile_dir)
-            except: pass
-            
-            base_name = os.path.splitext(os.path.basename(docx_path))[0]
+            base_name = os.path.splitext(os.path.basename(abs_docx))[0]
             generated_pdf = os.path.join(outdir, f"{base_name}.pdf")
             
-            if generated_pdf != output_pdf_path and os.path.exists(generated_pdf):
-                os.rename(generated_pdf, output_pdf_path)
+            if generated_pdf != abs_pdf and os.path.exists(generated_pdf):
+                os.rename(generated_pdf, abs_pdf)
             
             if progress_callback: progress_callback(100)
-            return os.path.exists(output_pdf_path)
+            return os.path.exists(abs_pdf)
     except Exception as e:
         logging.error(f"Error converting Word to PDF: {e}")
         return False
