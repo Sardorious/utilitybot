@@ -4,8 +4,8 @@ After=network.target
 
 [Service]
 User=root
-WorkingDirectory=/path/to/UtilityBot
-ExecStart=/path/to/UtilityBot/venv/bin/python bot.py
+WorkingDirectory=/root/utilitybot
+ExecStart=/root/utilitybot/venv/bin/python bot.py
 Restart=always
 RestartSec=5
 

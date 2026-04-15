@@ -23,19 +23,29 @@ jobs:
           
           # Replace 'YOUR_FOLDER_PATH_HERE' with your actual directory path on the server
           script: |
-            APP_DIR="~/utilitybot"
+            set -e
+            APP_DIR="/root/utilitybot"
             
             echo "Moving to application directory: $APP_DIR"
             cd $APP_DIR
             
+            echo "Current Directory: $(pwd)"
+            
             echo "Pulling latest changes from GitHub..."
             git pull origin main
             
+            echo "Latest Commit:"
+            git log -1 --oneline
+            
             echo "Updating dependencies..."
-            venv/bin/pip install -r requirements.txt
+            ./venv/bin/pip install --upgrade pip
+            ./venv/bin/pip install -r requirements.txt
+            
+            echo "Checking yt-dlp version..."
+            ./venv/bin/pip show yt-dlp || echo "yt-dlp not found in venv!"
             
             echo "Restarting the utilitybot service..."
-            # Adjust the service name if different
+            sudo systemctl daemon-reload
             sudo systemctl restart utilitybot.service
             
             echo "Deployment completed successfully!"
