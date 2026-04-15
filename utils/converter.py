@@ -4,39 +4,43 @@ import traceback
 import sys
 import subprocess
 
-def word_to_pdf(docx_path: str, output_pdf_path: str) -> bool:
+def word_to_pdf(docx_path: str, output_pdf_path: str, progress_callback=None) -> bool:
     """
     Converts a Word (.docx) file to a PDF file.
     On Windows it uses docx2pdf (requires MS Word).
     On Linux it uses LibreOffice CLI (requires libreoffice to be installed).
     """
     try:
+        if progress_callback: progress_callback(20)
         if sys.platform == "win32":
             from docx2pdf import convert
             convert(docx_path, output_pdf_path)
             return os.path.exists(output_pdf_path)
         else:
             outdir = os.path.dirname(output_pdf_path)
-            cmd = ['libreoffice', '--headless', '--convert-to', 'pdf', docx_path, '--outdir', outdir]
+            if progress_callback: progress_callback(40)
             subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            if progress_callback: progress_callback(80)
             
             base_name = os.path.splitext(os.path.basename(docx_path))[0]
             generated_pdf = os.path.join(outdir, f"{base_name}.pdf")
             
             if generated_pdf != output_pdf_path and os.path.exists(generated_pdf):
                 os.rename(generated_pdf, output_pdf_path)
-                
+            
+            if progress_callback: progress_callback(100)
             return os.path.exists(output_pdf_path)
     except Exception as e:
         logging.error(f"Error converting Word to PDF: {e}")
         return False
 
-def pdf_to_word(pdf_path: str, output_docx_path: str) -> bool:
+def pdf_to_word(pdf_path: str, output_docx_path: str, progress_callback=None) -> bool:
     """
     Converts a PDF file to a Word (.docx) file using OCR.
     Extracts text to plain string and saves it handling UTF-8.
     """
     try:
+        if progress_callback: progress_callback(10)
         import fitz
         import pytesseract
         from PIL import Image
@@ -45,8 +49,9 @@ def pdf_to_word(pdf_path: str, output_docx_path: str) -> bool:
 
         doc = Document()
         pdf_document = fitz.open(pdf_path)
+        total_pages = len(pdf_document)
         
-        for page_num in range(len(pdf_document)):
+        for page_num in range(total_pages):
             page = pdf_document.load_page(page_num)
             pix = page.get_pixmap()
             
@@ -56,21 +61,27 @@ def pdf_to_word(pdf_path: str, output_docx_path: str) -> bool:
             if text.strip():
                 doc.add_paragraph(text.strip())
             
-            if page_num < len(pdf_document) - 1:
+            if page_num < total_pages - 1:
                 doc.add_page_break()
+            
+            if progress_callback and total_pages > 0:
+                current_percent = 10 + ((page_num + 1) / total_pages * 80)
+                progress_callback(current_percent)
                 
         doc.save(output_docx_path)
         pdf_document.close()
+        if progress_callback: progress_callback(100)
         return os.path.exists(output_docx_path)
     except Exception as e:
         logging.error(f"Error converting PDF to Word with OCR: {e}")
         return False
 
-def md_to_pdf(md_path: str, output_pdf_path: str) -> bool:
+def md_to_pdf(md_path: str, output_pdf_path: str, progress_callback=None) -> bool:
     """
     Converts a Markdown (.md) file to a PDF file.
     """
     try:
+        if progress_callback: progress_callback(10)
         import markdown
         from xhtml2pdf import pisa
         import os
@@ -86,8 +97,10 @@ def md_to_pdf(md_path: str, output_pdf_path: str) -> bool:
             return f"![Mermaid Diagram](https://kroki.io/mermaid/png/{b64})"
             
         md_content = re.sub(r'```mermaid\s*\n(.*?)\n```', replacer, md_content, flags=re.DOTALL | re.IGNORECASE)
+        if progress_callback: progress_callback(40)
             
         html_content = markdown.markdown(md_content, extensions=['extra', 'codehilite', 'tables'])
+        if progress_callback: progress_callback(60)
         
         script_dir = os.path.dirname(os.path.abspath(__file__))
         font_dir = os.path.join(script_dir, "fonts")
@@ -123,7 +136,8 @@ def md_to_pdf(md_path: str, output_pdf_path: str) -> bool:
         
         with open(output_pdf_path, "w+b") as result_file:
             pisa_status = pisa.CreatePDF(full_html, dest=result_file)
-            
+        
+        if progress_callback: progress_callback(100)
         return not pisa_status.err
     except Exception as e:
         logging.error(f"Error in md_to_pdf: {e}\n{traceback.format_exc()}")

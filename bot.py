@@ -52,6 +52,51 @@ def clean_up(*filepaths):
             except Exception as e:
                 logging.error(f"Error removing file {fp}: {e}")
 
+async def update_progress_ui(msg: types.Message, percent: int, title: str, status_map: dict):
+    """Universal progress bar UI updater"""
+    bar_length = 10
+    percent = min(100, max(0, int(percent)))
+    filled = percent // 10
+    bar = "■" * filled + "□" * (bar_length - filled)
+    
+    # Find active status based on thresholds
+    active_status = "Amal bajarilmoqda..."
+    # Sort keys descending to find the highest threshold passed
+    for threshold in sorted(status_map.keys(), reverse=True):
+        if percent >= threshold:
+            active_status = status_map[threshold]
+            break
+            
+    new_text = (
+        f"⏳ {title}\n\n"
+        f"[{bar}] {percent}%\n"
+        f"{active_status}\n\n"
+        f"Iltimos, kuting..."
+    )
+    try:
+        # Only update if text changed or it's a critical update
+        if msg.text != new_text:
+            await msg.edit_text(new_text)
+    except Exception:
+        pass
+
+def get_progress_callback(msg: types.Message, title: str, status_map: dict):
+    """Factory for thread-safe progress callbacks"""
+    loop = asyncio.get_running_loop()
+    # Use a dictionary to keep track of shared state
+    state = {'last_percent': -10}
+    
+    def callback(percent: float):
+        # Update every 10% or at exactly 100%
+        if percent >= state['last_percent'] + 10 or percent >= 100:
+            state['last_percent'] = int(percent // 10) * 10
+            if percent >= 100: state['last_percent'] = 100
+            
+            loop.call_soon_threadsafe(
+                lambda: asyncio.create_task(update_progress_ui(msg, state['last_percent'], title, status_map))
+            )
+    return callback
+
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     await message.answer(
@@ -68,85 +113,110 @@ async def cmd_start(message: types.Message):
 
 @dp.message(F.photo)
 async def handle_photo(message: types.Message):
-    wait_msg = await message.answer("⏳ Rasm qabul qilindi, hajmi kichraytirilmoqda...")
+    wait_msg = await message.answer("⏳ Rasm qabul qilindi. Qayta ishlash boshlandi...")
     
-    photo = message.photo[-1] # eng katta sifatlisi
+    # Eng katta rasmni olish
+    photo = message.photo[-1]
     input_path = generate_temp_path(".jpg")
     output_path = generate_temp_path("_compressed.jpg")
     
     try:
         await bot.download(photo, destination=input_path)
         
-        # CPU blocking task inside thread
-        success = await asyncio.to_thread(compress_image, input_path, output_path, 50)
+        progress_callback = get_progress_callback(
+            wait_msg,
+            "Rasm siqilmoqda...",
+            {0: "🖼️ Rasm yuklanmoqda...", 40: "🎨 Hajmi kichraytirilmoqda...", 100: "✅ Tayyorlanmoqda..."}
+        )
+        
+        # Alohida thread'da siqish
+        success = await asyncio.to_thread(compress_image, input_path, output_path, 60, progress_callback)
         
         if success:
-            compressed_file = FSInputFile(output_path)
-            await message.reply_document(compressed_file, caption="✅ Rasm muvaffaqiyatli kichraytirildi.")
+            await wait_msg.edit_text("✅ Rasm muvaffaqiyatli siqildi! Sizga yuborilmoqda...")
+            result_file = FSInputFile(output_path)
+            await message.reply_photo(result_file, caption="✅ Siqilgan rasm.")
         else:
-            await message.answer("❌ Kechirasiz, rasmni kichraytirishda xatolik yuz berdi.")
+            await wait_msg.edit_text("❌ Kechirasiz, rasmni qayta ishlashda xatolik yuz berdi.")
     except Exception as e:
         logging.error(f"Error handling photo: {e}")
         await message.answer("❌ Kechirasiz, rasmni qayta ishlashda kutilmagan xatolik yuz berdi.")
     finally:
         clean_up(input_path, output_path)
-        await wait_msg.delete()
 
 @dp.message(F.document)
 async def handle_document(message: types.Message):
     document = message.document
     file_name = document.file_name.lower()
+    extension = os.path.splitext(file_name)[1]
     
     wait_msg = await message.answer("⏳ Fayl yuklab olinmoqda...")
     
     # Determine the task
-    if file_name.endswith('.rar'):
+    if extension == '.rar':
         task_name = "RAR to ZIP"
-        input_ext, output_ext = ".rar", ".zip"
-        func = rar_to_zip
-    elif file_name.endswith('.docx') or file_name.endswith('.doc'):
+        output_ext = ".zip"
+    elif extension in ['.docx', '.doc']:
         task_name = "Word to PDF"
-        input_ext, output_ext = ".docx", ".pdf"
-        func = word_to_pdf
-    elif file_name.endswith('.pdf'):
+        output_ext = ".pdf"
+        extension = '.docx'
+    elif extension == '.pdf':
         task_name = "PDF to Word"
-        input_ext, output_ext = ".pdf", ".docx"
-        func = pdf_to_word
-    elif file_name.endswith('.md'):
+        output_ext = ".docx"
+    elif extension == '.md':
         task_name = "Markdown to PDF"
-        input_ext, output_ext = ".md", ".pdf"
-        func = md_to_pdf
-    elif file_name.endswith('.jpg') or file_name.endswith('.png') or file_name.endswith('.jpeg'):
-        task_name = "Image Compress"
-        input_ext, output_ext = os.path.splitext(file_name)[1], "_compressed.jpg"
-        func = lambda i, o: compress_image(i, o, 60)
+        output_ext = ".pdf"
     else:
         await wait_msg.edit_text("🤷‍♂️ Ushbu fayl turini qo'llab-quvvatlamayman. Iltimos, faqat qo'llab-quvvatlanadigan fayllarni (rar, docx, pdf, md, rasmlar) yuboring.")
         return
         
     await wait_msg.edit_text(f"⏳ Fayl qabul qilindi. Jarayon bajarilmoqda: {task_name}...")
     
-    input_path = generate_temp_path(input_ext)
+    input_path = generate_temp_path(extension)
+    base_name = os.path.splitext(document.file_name)[0]
+    output_path = os.path.join(TEMP_DIR, f"{base_name}{output_ext}")
     
-    if task_name == "Image Compress":
-        output_path = generate_temp_path(output_ext)
-    else:
-        # Create output path matching original file name
-        base_name = os.path.splitext(document.file_name)[0]
-        output_path = os.path.join(TEMP_DIR, f"{base_name}{output_ext}")
-        
     try:
         await bot.download(document, destination=input_path)
         
-        # Execute long computation in separate thread to avoid blocking asyncio loop
-        success = await asyncio.to_thread(func, input_path, output_path)
+        if extension == '.docx':
+            progress_callback = get_progress_callback(
+                wait_msg, "Hujjat o'tkazilmoqda...", 
+                {0: "📄 Word yuklanmoqda...", 40: "🔄 PDF'ga o'tkazilmoqda...", 100: "✅ Tayyorlanmoqda..."}
+            )
+            success = await asyncio.to_thread(word_to_pdf, input_path, output_path, progress_callback)
+            caption = "📄 Word'dan PDF'ga o'tkazildi."
+            
+        elif extension == '.pdf':
+            progress_callback = get_progress_callback(
+                wait_msg, "Hujjat OCR qilinmoqda...", 
+                {0: "📄 PDF yuklanmoqda...", 10: "🔍 Matn tanib olinmoqda (OCR)...", 100: "✅ Tayyorlanmoqda..."}
+            )
+            success = await asyncio.to_thread(pdf_to_word, input_path, output_path, progress_callback)
+            caption = "📄 PDF'dan Word'ga (OCR) o'tkazildi."
+            
+        elif extension == '.md':
+            progress_callback = get_progress_callback(
+                wait_msg, "Hujjat o'tkazilmoqda...", 
+                {0: "📝 Markdown yuklanmoqda...", 40: "📊 Diagrammalar chizilmoqda...", 90: "🔄 PDF'ga o'tkazilmoqda...", 100: "✅ Tayyorlanmoqda..."}
+            )
+            success = await asyncio.to_thread(md_to_pdf, input_path, output_path, progress_callback)
+            caption = "📝 Markdown'dan PDF'ga o'tkazildi."
+            
+        elif extension == '.rar':
+            progress_callback = get_progress_callback(
+                wait_msg, "Arxiv o'tkazilmoqda...", 
+                {0: "📦 RAR yuklanmoqda...", 20: "🔓 Ochilmoqda...", 50: "🤐 ZIP'ga siqilmoqda...", 100: "✅ Tayyorlanmoqda..."}
+            )
+            success = await asyncio.to_thread(rar_to_zip, input_path, output_path, progress_callback)
+            caption = "📦 RAR'dan ZIP'ga o'tkazildi."
         
         if success:
-            await wait_msg.edit_text("✅ Fayl tayyorlandi! Sizga yuborilmoqda...")
+            await wait_msg.edit_text("✅ Jarayon muvaffaqiyatli yakunlandi! Fayl yuborilmoqda...")
             result_file = FSInputFile(output_path)
-            await message.reply_document(result_file)
+            await message.reply_document(result_file, caption=caption)
         else:
-            await wait_msg.edit_text("❌ Kechirasiz, faylni konvertatsiya qilishda xatolik yuz berdi. Bu fayl buzilgan yoki qo'llab-quvvatlanmaydigan xususiyatlarga ega bo'lishi mumkin.")
+            await wait_msg.edit_text("❌ Kechirasiz, faylni qayta ishlashda xatolik yuz berdi. Bu fayl buzilgan yoki qo'llab-quvvatlanmaydigan xususiyatlarga ega bo'lishi mumkin.")
     
     except Exception as e:
         logging.error(f"Error handling task: {e}")
@@ -165,35 +235,11 @@ async def handle_text(message: types.Message):
         output_path = generate_temp_path(".mp3")
         
         try:
-            loop = asyncio.get_running_loop()
-            last_percent = -10 # To Ensure first update at 0%
-            
-            def progress_callback(percent: float):
-                nonlocal last_percent
-                # Update every 10%
-                if percent >= last_percent + 10 or percent >= 100:
-                    last_percent = int(percent // 10) * 10
-                    loop.call_soon_threadsafe(
-                        lambda: asyncio.create_task(update_progress_ui(wait_msg, last_percent))
-                    )
-
-            async def update_progress_ui(msg: types.Message, percent: int):
-                bar_length = 10
-                filled = int(percent / 10)
-                bar = "■" * filled + "□" * (bar_length - filled)
-                status_text = "⬇️ Yuklab olinmoqda..." if percent < 30 else "⚙️ Tozalanmoqda..."
-                if percent >= 100: status_text = "✅ Tayyorlanmoqda..."
-                
-                new_text = (
-                    f"⏳ YouTube audiosi qayta ishlanmoqda...\n\n"
-                    f"[{bar}] {percent}%\n"
-                    f"{status_text}\n\n"
-                    f"Bu video uzunligiga qarab bir necha daqiqa vaqt olishi mumkin."
-                )
-                try:
-                    await msg.edit_text(new_text)
-                except Exception:
-                    pass # Ignore if message is already deleted or identical
+            progress_callback = get_progress_callback(
+                wait_msg, 
+                "YouTube audiosi qayta ishlanmoqda...",
+                {0: "⬇️ Yuklab olinmoqda...", 30: "⚙️ Tozalanmoqda...", 100: "✅ Tayyorlanmoqda..."}
+            )
 
             # CPU va vaqt talab qiladigan jarayonni alohida thread'da ishga tushirish
             final_path = await asyncio.to_thread(process_video, text, output_path, "mp3", 0.6, progress_callback)
