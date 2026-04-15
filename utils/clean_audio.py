@@ -54,7 +54,7 @@ HIGHPASS_FREQ = 80           # Past chastotali shovqinni kesish (Hz)
 LOWPASS_FREQ = 12000         # Yuqori chastotali shovqinni kesish (Hz)
 
 # ─── Chunk konfiguratsiya (uzun videolar uchun) ──────────────────────────
-CHUNK_DURATION_SEC = 300     # Har bir bo'lak 5 daqiqa (300 soniya)
+CHUNK_DURATION_SEC = 60      # Har bir bo'lak 1 daqiqa (RAM xavfsizligi darajasi)
 OVERLAP_SEC = 2              # Bo'laklar orasida 2 soniyalik overlap (silliq ulanish uchun)
 LONG_VIDEO_THRESHOLD = 600   # 10 daqiqadan uzun = bo'laklab ishlash
 
@@ -207,13 +207,10 @@ def reduce_noise(audio: np.ndarray, sr: int, strength: float) -> np.ndarray:
     reduced = nr.reduce_noise(
         y=audio,
         sr=sr,
-        stationary=False,        # Statsionar bo'lmagan shovqin uchun
+        stationary=True,         # Statsionar shovqin uchun (RAM xavfsiz va tezroq)
         prop_decrease=strength,  # Kamaytirish kuchi
         n_fft=2048,
-        hop_length=512,
-        n_std_thresh_stationary=1.5,
-        freq_mask_smooth_hz=500,
-        time_mask_smooth_ms=50,
+        hop_length=512
     )
     
     return reduced
