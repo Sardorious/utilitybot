@@ -2,6 +2,7 @@ import os
 import asyncio
 import logging
 import uuid
+import re
 from dotenv import load_dotenv
 
 from aiogram import Bot, Dispatcher, F, types
@@ -11,6 +12,7 @@ from aiogram.types import FSInputFile
 from utils.archive import rar_to_zip
 from utils.converter import word_to_pdf, pdf_to_word, md_to_pdf
 from utils.image import compress_image
+from utils.clean_audio import process_video
 
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -59,8 +61,9 @@ async def cmd_start(message: types.Message):
         "2️⃣ Word hujjatini PDF qilib beraman (.docx yuboring)\n"
         "3️⃣ PDF hujjatini Word qilib beraman (.pdf yuboring)\n"
         "4️⃣ Rasm o'lchamini kichraytiraman (Rasm yuboring)\n"
-        "5️⃣ Markdown hujjatini PDF qilib beraman (.md yuboring)\n\n"
-        "Faylni yuboring va mos keladigan ishni bajarib beraman!"
+        "5️⃣ Markdown hujjatini PDF qilib beraman (.md yuboring)\n"
+        "6️⃣ YouTube videodan audioni yuklab, tozalab beraman (YouTube havola yuboring)\n\n"
+        "Fayl yoki havola yuboring va mos keladigan ishni bajarib beraman!"
     )
 
 @dp.message(F.photo)
@@ -149,6 +152,33 @@ async def handle_document(message: types.Message):
         await wait_msg.edit_text(f"❌ Kutilmagan xatolik yuz berdi.")
     finally:
         clean_up(input_path, output_path)
+
+@dp.message(F.text)
+async def handle_text(message: types.Message):
+    text = message.text
+    
+    # Check if youtube url
+    if re.match(r'^(https?\:\/\/)?(www\.youtube\.com|youtu\.be)\/.+$', text):
+        wait_msg = await message.answer("⏳ YouTube havolasi qabul qilindi. Audio yuklab olinib tozalanishi boshlandi...\nBu jarayon video uzunligiga qarab bir necha daqiqa vaqt olishi mumkin.")
+        
+        output_path = generate_temp_path(".mp3")
+        
+        try:
+            # CPU va vaqt talab qiladigan jarayonni alohida thread'da ishga tushirish
+            final_path = await asyncio.to_thread(process_video, text, output_path, "mp3", 0.6)
+            
+            if final_path and os.path.exists(final_path):
+                await wait_msg.edit_text("✅ Audio mufavaqqiyatli tozalab tayyorlandi! Sizga yuborilmoqda...")
+                result_file = FSInputFile(final_path)
+                await message.reply_audio(result_file, caption="✅ Orqa fon shovqinlaridan tozalangan audio.")
+            else:
+                await wait_msg.edit_text("❌ Kechirasiz, audioni tozalashda xatolik yuz berdi.")
+        
+        except Exception as e:
+            logging.error(f"Error handling youtube audio: {e}")
+            await wait_msg.edit_text(f"❌ Kutilmagan xatolik yuz berdi: {str(e)}")
+        finally:
+            clean_up(output_path)
 
 async def main():
     print("Bot is starting...")
