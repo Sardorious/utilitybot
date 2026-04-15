@@ -3,6 +3,7 @@ import logging
 import traceback
 import sys
 import subprocess
+import shutil
 
 def word_to_pdf(docx_path: str, output_pdf_path: str, progress_callback=None) -> bool:
     """
