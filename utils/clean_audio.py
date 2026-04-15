@@ -60,11 +60,12 @@ LONG_VIDEO_THRESHOLD = 600   # 10 daqiqadan uzun = bo'laklab ishlash
 def check_ffmpeg():
     """FFmpeg o'rnatilganligini tekshirish"""
     if shutil.which("ffmpeg") is None:
-        print("❌ FFmpeg topilmadi!")
-        print("   FFmpeg o'rnating:")
-        print("   Windows: winget install FFmpeg")
-        print("   yoki: https://ffmpeg.org/download.html")
-        sys.exit(1)
+        raise RuntimeError(
+            "FFmpeg topilmadi!\n"
+            "FFmpeg o'rnating:\n"
+            "Windows: winget install FFmpeg\n"
+            "yoki: https://ffmpeg.org/download.html"
+        )
 
 
 def format_time(seconds: float) -> str:
@@ -100,12 +101,12 @@ def download_audio(url: str, output_dir: str) -> str:
     try:
         subprocess.run(cmd, check=True, capture_output=False)
     except FileNotFoundError:
-        print("❌ yt-dlp topilmadi!")
-        print("   O'rnating: pip install yt-dlp")
-        sys.exit(1)
+        raise FileNotFoundError(
+            "yt-dlp topilmadi!\n"
+            "O'rnating: pip install yt-dlp"
+        )
     except subprocess.CalledProcessError as e:
-        print(f"❌ Yuklab olishda xatolik: {e}")
-        sys.exit(1)
+        raise RuntimeError(f"Yuklab olishda xatolik: {e}")
     
     # Yuklab olingan faylni topish
     for f in os.listdir(output_dir):
@@ -115,8 +116,7 @@ def download_audio(url: str, output_dir: str) -> str:
             print(f"   ✅ Yuklab olindi: {f} ({file_size:.1f} MB)")
             return filepath
     
-    print("❌ Yuklab olingan fayl topilmadi")
-    sys.exit(1)
+    raise FileNotFoundError("Yuklab olingan fayl topilmadi")
 
 
 def get_audio_duration(filepath: str) -> float:
@@ -602,12 +602,16 @@ Misollar:
     # Chunk size ni yangilash
     CHUNK_DURATION_SEC = args.chunk_size
     
-    process_video(
-        url=args.url,
-        output_path=args.output,
-        fmt=args.format,
-        noise_strength=args.noise_reduce_strength
-    )
+    try:
+        process_video(
+            url=args.url,
+            output_path=args.output,
+            fmt=args.format,
+            noise_strength=args.noise_reduce_strength
+        )
+    except Exception as e:
+        print(f"\n❌ Xatolik yuz berdi: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@ import os
 import zipfile
 import tempfile
 import rarfile
+import logging
 
 def rar_to_zip(rar_path: str, output_zip_path: str) -> bool:
     """
@@ -24,5 +25,5 @@ def rar_to_zip(rar_path: str, output_zip_path: str) -> bool:
                         zf.write(file_path, arcname)
         return True
     except Exception as e:
-        print(f"Error converting RAR to ZIP: {e}")
+        logging.error(f"Error converting RAR to ZIP: {e}")
         return False

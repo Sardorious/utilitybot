@@ -1,5 +1,6 @@
 from PIL import Image
 import os
+import logging
 
 def compress_image(input_image_path: str, output_image_path: str, quality: int = 60) -> bool:
     """
@@ -16,5 +17,5 @@ def compress_image(input_image_path: str, output_image_path: str, quality: int =
             img.save(output_image_path, "JPEG", optimize=True, quality=quality)
         return os.path.exists(output_image_path)
     except Exception as e:
-        print(f"Error compressing image: {e}")
+        logging.error(f"Error compressing image: {e}")
         return False

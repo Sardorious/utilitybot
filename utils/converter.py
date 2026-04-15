@@ -1,5 +1,6 @@
 import os
-
+import logging
+import traceback
 import sys
 import subprocess
 
@@ -27,7 +28,7 @@ def word_to_pdf(docx_path: str, output_pdf_path: str) -> bool:
                 
             return os.path.exists(output_pdf_path)
     except Exception as e:
-        print(f"Error converting Word to PDF: {e}")
+        logging.error(f"Error converting Word to PDF: {e}")
         return False
 
 def pdf_to_word(pdf_path: str, output_docx_path: str) -> bool:
@@ -62,7 +63,7 @@ def pdf_to_word(pdf_path: str, output_docx_path: str) -> bool:
         pdf_document.close()
         return os.path.exists(output_docx_path)
     except Exception as e:
-        print(f"Error converting PDF to Word with OCR: {e}")
+        logging.error(f"Error converting PDF to Word with OCR: {e}")
         return False
 
 def md_to_pdf(md_path: str, output_pdf_path: str) -> bool:
@@ -125,13 +126,5 @@ def md_to_pdf(md_path: str, output_pdf_path: str) -> bool:
             
         return not pisa_status.err
     except Exception as e:
-        import logging
-        import traceback
-        logging.getLogger().error(f"Error in md_to_pdf: {e}\n{traceback.format_exc()}")
-        try:
-            with open("errors.log", "a", encoding="utf-8") as f:
-                f.write(f"MD2PDF ERR: {e}\n{traceback.format_exc()}\n")
-        except:
-            pass
-        print(f"Error converting Markdown to PDF: {e}")
+        logging.error(f"Error in md_to_pdf: {e}\n{traceback.format_exc()}")
         return False
