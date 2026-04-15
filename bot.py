@@ -86,7 +86,8 @@ async def handle_photo(message: types.Message):
         else:
             await message.answer("❌ Kechirasiz, rasmni kichraytirishda xatolik yuz berdi.")
     except Exception as e:
-        await message.answer(f"❌ Xatolik yuz berdi: {str(e)}")
+        logging.error(f"Error handling photo: {e}")
+        await message.answer("❌ Kechirasiz, rasmni qayta ishlashda kutilmagan xatolik yuz berdi.")
     finally:
         clean_up(input_path, output_path)
         await wait_msg.delete()
@@ -176,7 +177,7 @@ async def handle_text(message: types.Message):
         
         except Exception as e:
             logging.error(f"Error handling youtube audio: {e}")
-            await wait_msg.edit_text(f"❌ Kutilmagan xatolik yuz berdi: {str(e)}")
+            await wait_msg.edit_text("❌ Kechirasiz, audioni qayta ishlashda kutilmagan xatolik yuz berdi.")
         finally:
             clean_up(output_path)
 
