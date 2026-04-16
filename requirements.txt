@@ -9,10 +9,3 @@ Pillow==10.2.0
 markdown
 xhtml2pdf
 yt-dlp
-noisereduce
-pydub
-numpy
-scipy
-librosa
-soundfile
-pyloudnorm
