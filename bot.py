@@ -13,6 +13,7 @@ from utils.archive import rar_to_zip
 from utils.converter import word_to_pdf, pdf_to_word, md_to_pdf
 from utils.image import compress_image
 from utils.clean_audio import process_video
+from utils.video import download_video
 
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -110,7 +111,8 @@ async def cmd_start(message: types.Message):
         "3️⃣ PDF hujjatini Word qilib beraman (.pdf yuboring)\n"
         "4️⃣ Rasm o'lchamini kichraytiraman (Rasm yuboring)\n"
         "5️⃣ Markdown hujjatini PDF qilib beraman (.md yuboring)\n"
-        "6️⃣ YouTube videodan audioni yuklab, tozalab beraman (YouTube havola yuboring)\n\n"
+        "6️⃣ YouTube videodan audioni yuklab, tozalab beraman (YouTube havola yuboring)\n"
+        "7️⃣ Instagram havoladan videoni yuklab beraman (Instagram havola yuboring)\n\n"
         "Fayl yoki havola yuboring va mos keladigan ishni bajarib beraman!"
     )
 
@@ -294,6 +296,46 @@ async def handle_text(message: types.Message):
             else: await message.answer("❌ Kechirasiz, kutilmagan xatolik yuz berdi.")
         finally:
             clean_up(output_path)
+            
+    # Check if instagram url
+    elif re.match(r'^(https?\:\/\/)?(www\.)?instagram\.com\/.+$', text):
+        output_path = generate_temp_path(".mp4")
+        wait_msg = None
+        try:
+            if process_semaphore.locked():
+                status_msg = await message.answer("⏳ Navbatda turibsiz... Hozirda boshqa vazifa bajarilmoqda.")
+
+            async with process_semaphore:
+                if 'status_msg' in locals(): await status_msg.delete()
+                wait_msg = await message.answer("⏳ Instagram havolasi qabul qilindi. Video yuklab olinmoqda...")
+                
+                logging.info(f"Starting Instagram video download for user {message.from_user.id}: {text}")
+                
+                progress_callback = get_progress_callback(
+                    wait_msg, 
+                    "Instagram videosi yuklanmoqda...",
+                    {0: "⬇️ Yuklab olinmoqda...", 100: "✅ Tayyorlanmoqda..."}
+                )
+
+                final_path = await asyncio.to_thread(download_video, text, output_path, progress_callback)
+                
+                if final_path and os.path.exists(final_path):
+                    logging.info(f"Instagram download success for user {message.from_user.id}")
+                    await wait_msg.edit_text("✅ Video mufavaqqiyatli yuklandi! Sizga yuborilmoqda...")
+                    result_file = FSInputFile(final_path)
+                    await message.reply_video(result_file, caption="✅ Instagram videosi.")
+                else:
+                    logging.error(f"Instagram download failed for user {message.from_user.id}")
+                    await wait_msg.edit_text("❌ Kechirasiz, videoni yuklashda xatolik yuz berdi yoxud video yopiq profildan olingan.")
+        
+        except Exception as e:
+            logging.error(f"Error handling instagram video: {e}")
+            if wait_msg: await wait_msg.edit_text("❌ Kechirasiz, videoni qayta ishlashda kutilmagan xatolik yuz berdi.")
+            else: await message.answer("❌ Kechirasiz, kutilmagan xatolik yuz berdi.")
+        finally:
+            clean_up(output_path)
+    else:
+        await message.answer("🤷‍♂️ Ushbu xabarni tushunmadim. Iltimos, YouTube yoki Instagram havolasi yuboring.")
 
 async def main():
     print("Bot is starting...")
