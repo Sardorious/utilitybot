@@ -50,11 +50,22 @@ def generate_temp_path(extension: str) -> str:
 
 def clean_up(*filepaths):
     for fp in filepaths:
-        if fp and os.path.exists(fp):
-            try:
-                os.remove(fp)
-            except Exception as e:
-                logging.error(f"Error removing file {fp}: {e}")
+        if not fp: continue
+        
+        # Odatda filepaths ichki papka bo'ladi (TEMP_DIR)
+        # Orphaned yoki yt-dlp ni .part fayllari qolib ketmasligi uchun 
+        # asosi filename bilan boshlangan barcha xuddi shu nomli fayllarni o'chiramiz.
+        dirname = os.path.dirname(fp)
+        basename = os.path.splitext(os.path.basename(fp))[0]
+        
+        if os.path.exists(dirname):
+            for filename in os.listdir(dirname):
+                if filename.startswith(basename):
+                    full_path = os.path.join(dirname, filename)
+                    try:
+                        os.remove(full_path)
+                    except Exception as e:
+                        logging.error(f"Error removing orphaned file {full_path}: {e}")
 
 async def update_progress_ui(msg: types.Message, percent: int, title: str, status_map: dict):
     """Universal progress bar UI updater"""
