@@ -87,6 +87,10 @@ def download_video(url: str, output_path: str, progress_callback=None) -> str:
             'no_warnings': True,
         }
         
+        # If cookies.txt exists in the project root, use it to bypass 429 requests
+        if os.path.exists("cookies.txt"):
+            ydl_opts['cookiefile'] = "cookies.txt"
+        
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
