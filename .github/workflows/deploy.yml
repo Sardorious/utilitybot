@@ -31,6 +31,13 @@ jobs:
             
             echo "Current Directory: $(pwd)"
             
+            echo "Writing Instagram cookies securely if provided via Secrets..."
+            if [ -n "${{ secrets.INSTAGRAM_COOKIES }}" ]; then
+              echo "${{ secrets.INSTAGRAM_COOKIES }}" > cookies.txt
+              chmod 600 cookies.txt
+              echo "✅ cookies.txt generated successfully."
+            fi
+            
             echo "Pulling latest changes from GitHub..."
             git pull origin main
             
