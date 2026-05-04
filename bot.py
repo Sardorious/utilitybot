@@ -13,7 +13,7 @@ from utils.archive import rar_to_zip
 from utils.converter import word_to_pdf, pdf_to_word, md_to_pdf
 from utils.image import compress_image
 from utils.clean_audio import process_video
-from utils.video import download_video
+from utils.video import download_video, get_video_info
 
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -333,8 +333,18 @@ async def handle_text(message: types.Message):
                 if final_path and os.path.exists(final_path):
                     logging.info(f"Instagram download success for user {message.from_user.id}")
                     await wait_msg.edit_text("✅ Video mufavaqqiyatli yuklandi! Sizga yuborilmoqda...")
+                    
+                    # Extract metadata for better Telegram player support
+                    video_info = get_video_info(final_path)
+                    
                     result_file = FSInputFile(final_path)
-                    await message.reply_video(result_file, caption="✅ Instagram videosi.")
+                    await message.reply_video(
+                        result_file, 
+                        caption="✅ Instagram videosi.",
+                        width=video_info.get("width"),
+                        height=video_info.get("height"),
+                        duration=int(video_info.get("duration", 0)) if video_info.get("duration") else None
+                    )
                 else:
                     logging.error(f"Instagram download failed for user {message.from_user.id}")
                     await wait_msg.edit_text("❌ Kechirasiz, videoni yuklashda xatolik yuz berdi yoxud video yopiq profildan olingan.")
