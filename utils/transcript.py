@@ -153,18 +153,16 @@ def create_transcript_docx(transcript_data, output_path):
         if not transcript_data:
             doc.add_paragraph("Transkript mavjud emas.")
         else:
-            for entry in transcript_data:
-                # Format timestamp: [HH:MM:SS]
-                start_sec = int(entry['start'])
-                hours = start_sec // 3600
-                minutes = (start_sec % 3600) // 60
-                seconds = start_sec % 60
+            # Join all text segments into one or more paragraphs without timestamps
+            # For better readability, we'll combine them but keep some structure
+            current_paragraph = ""
+            for i, entry in enumerate(transcript_data):
+                current_paragraph += entry['text'] + " "
                 
-                timestamp = f"[{hours:02d}:{minutes:02d}:{seconds:02d}]"
-                
-                p = doc.add_paragraph()
-                p.add_run(timestamp).bold = True
-                p.add_run(f" {entry['text']}")
+                # Every 5 segments or at the end, start a new paragraph to avoid one giant block
+                if (i + 1) % 5 == 0 or i == len(transcript_data) - 1:
+                    doc.add_paragraph(current_paragraph.strip())
+                    current_paragraph = ""
         
         doc.save(output_path)
         return True
