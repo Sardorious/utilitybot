@@ -78,47 +78,186 @@ def word_to_pdf(docx_path: str, output_pdf_path: str, progress_callback=None) ->
 
 def pdf_to_word(pdf_path: str, output_docx_path: str, progress_callback=None) -> bool:
     """
-    Converts a PDF file to a Word (.docx) file using OCR.
-    Extracts text to plain string and saves it handling UTF-8.
+    Converts a PDF file to a Word (.docx) file with table support and OCR fallback.
+    Maintains layout by tracking table positions relative to text.
     """
     try:
-        logging.info(f"Starting PDF to Word (OCR) conversion: {pdf_path}")
-        if progress_callback: progress_callback(10)
+        logging.info(f"Starting Enhanced PDF to Word conversion: {pdf_path}")
+        if progress_callback: progress_callback(5)
+        
         import fitz
+        import pdfplumber
         import pytesseract
         from PIL import Image
         from docx import Document
-        import os
-
+        from docx.shared import Inches, Pt
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        
         doc = Document()
-        pdf_document = fitz.open(pdf_path)
-        total_pages = len(pdf_document)
+        
+        # Set default font for multilingual support (Uzbek, Russian, English, Turkish)
+        style = doc.styles['Normal']
+        font = style.font
+        font.name = 'Arial'
+        font.size = Pt(11)
+        
+        # Open with both fitz (for pixmaps) and pdfplumber (for tables/text)
+        pdf_fitz = fitz.open(pdf_path)
+        pdf_plumber = pdfplumber.open(pdf_path)
+        
+        total_pages = len(pdf_plumber.pages)
         logging.info(f"PDF loaded: {total_pages} pages found")
         
-        for page_num in range(total_pages):
-            logging.info(f"Processing page {page_num + 1}/{total_pages}")
-            page = pdf_document.load_page(page_num)
-            pix = page.get_pixmap()
+        for i, page in enumerate(pdf_plumber.pages):
+            logging.info(f"Processing page {i+1}/{total_pages}")
             
+            # Get pixmap for OCR fallback
+            pix = pdf_fitz[i].get_pixmap()
             img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
             
-            text = pytesseract.image_to_string(img, lang='uzb+rus+eng+tur')
-            if text.strip():
-                doc.add_paragraph(text.strip())
+            # Scaling factor between pdfplumber coordinates (pts) and pixmap pixels
+            scale_x = pix.width / page.width
+            scale_y = pix.height / page.height
             
-            if page_num < total_pages - 1:
+            # 1. Find tables
+            tables = page.find_tables()
+            table_bboxes = [t.bbox for t in tables]
+            
+            # 2. Get text objects not in tables
+            words = page.extract_words()
+            non_table_words = []
+            for w in words:
+                in_table = False
+                for bbox in table_bboxes:
+                    # w['x0'], w['top'], w['x1'], w['bottom']
+                    if w['x0'] >= bbox[0] and w['top'] >= bbox[1] and w['x1'] <= bbox[2] and w['bottom'] <= bbox[3]:
+                        in_table = True
+                        break
+                if not in_table:
+                    non_table_words.append(w)
+            
+            # Group non-table words into paragraphs
+            page_content = []
+            if non_table_words:
+                # Simple grouping by vertical proximity
+                non_table_words.sort(key=lambda x: (x['top'], x['x0']))
+                current_para = []
+                last_bottom = -1
+                tolerance = 10 # pts
+                
+                for w in non_table_words:
+                    if last_bottom == -1 or w['top'] <= last_bottom + tolerance:
+                        current_para.append(w)
+                    else:
+                        if current_para:
+                            current_para.sort(key=lambda x: x['x0'])
+                            text = " ".join([word['text'] for word in current_para])
+                            page_content.append({'type': 'text', 'content': text, 'top': current_para[0]['top']})
+                        current_para = [w]
+                    last_bottom = w['bottom']
+                
+                if current_para:
+                    current_para.sort(key=lambda x: x['x0'])
+                    text = " ".join([word['text'] for word in current_para])
+                    page_content.append({'type': 'text', 'content': text, 'top': current_para[0]['top']})
+            
+            # If no words found (scanned PDF), OCR the whole page but mask tables if any
+            if not words and not tables:
+                text = pytesseract.image_to_string(img, lang='uzb+rus+eng+tur')
+                if text.strip():
+                    page_content.append({'type': 'text', 'content': text.strip(), 'top': 0})
+            elif not words and tables:
+                # Scanned PDF with vector tables? Or just no text found.
+                # We should still OCR the non-table areas.
+                # For simplicity, we'll OCR the whole page if no words at all.
+                text = pytesseract.image_to_string(img, lang='uzb+rus+eng+tur')
+                if text.strip():
+                    # This might overlap with tables, but it's a fallback
+                    page_content.append({'type': 'text', 'content': text.strip(), 'top': 0})
+
+            # Add tables to page content
+            for t in tables:
+                page_content.append({'type': 'table', 'obj': t, 'top': t.bbox[1]})
+            
+            # Sort everything by top coordinate to maintain layout
+            page_content.sort(key=lambda x: x['top'])
+            
+            # 3. Add to docx
+            for item in page_content:
+                if item['type'] == 'text':
+                    if item['content'].strip():
+                        p = doc.add_paragraph(item['content'])
+                        # Ensure font is applied to the run
+                        for run in p.runs:
+                            run.font.name = 'Arial'
+                elif item['type'] == 'table':
+                    t_obj = item['obj']
+                    table_rows = t_obj.rows
+                    if not table_rows: continue
+                    
+                    num_rows = len(table_rows)
+                    num_cols = len(table_rows[0].cells) if num_rows > 0 else 0
+                    
+                    if num_rows > 0 and num_cols > 0:
+                        docx_table = doc.add_table(rows=num_rows, cols=num_cols)
+                        docx_table.style = 'Table Grid'
+                        
+                        # Set column widths
+                        for c_idx in range(num_cols):
+                            cell_bbox = table_rows[0].cells[c_idx]
+                            if cell_bbox:
+                                width_pts = cell_bbox[2] - cell_bbox[0]
+                                docx_table.columns[c_idx].width = Inches(width_pts / 72.0)
+                        
+                        for r_idx, row_obj in enumerate(table_rows):
+                            for c_idx, cell_bbox in enumerate(row_obj.cells):
+                                if cell_bbox is None: continue
+                                
+                                cell = docx_table.cell(r_idx, c_idx)
+                                
+                                # Extract text from pdfplumber
+                                cell_area = page.within_bbox(cell_bbox)
+                                cell_text = cell_area.extract_text()
+                                
+                                # OCR Fallback for scanned/image cells
+                                if not cell_text or not cell_text.strip():
+                                    crop_bbox = (
+                                        cell_bbox[0] * scale_x,
+                                        cell_bbox[1] * scale_y,
+                                        cell_bbox[2] * scale_x,
+                                        cell_bbox[3] * scale_y
+                                    )
+                                    # Ensure crop_bbox is within image bounds
+                                    crop_bbox = (
+                                        max(0, crop_bbox[0]),
+                                        max(0, crop_bbox[1]),
+                                        min(pix.width, crop_bbox[2]),
+                                        min(pix.height, crop_bbox[3])
+                                    )
+                                    if crop_bbox[2] > crop_bbox[0] and crop_bbox[3] > crop_bbox[1]:
+                                        cell_img = img.crop(crop_bbox)
+                                        # Use multiple languages for OCR
+                                        cell_text = pytesseract.image_to_string(cell_img, lang='uzb+rus+eng+tur').strip()
+                                
+                                cell.text = (cell_text or "").strip()
+                                # Ensure font is applied to cell content
+                                for paragraph in cell.paragraphs:
+                                    for run in paragraph.runs:
+                                        run.font.name = 'Arial'
+            
+            if i < total_pages - 1:
                 doc.add_page_break()
             
-            if progress_callback and total_pages > 0:
-                current_percent = 10 + ((page_num + 1) / total_pages * 80)
-                progress_callback(current_percent)
-                
+            if progress_callback:
+                progress_callback(10 + ((i + 1) / total_pages * 85))
+
         doc.save(output_docx_path)
-        pdf_document.close()
+        pdf_fitz.close()
+        pdf_plumber.close()
         if progress_callback: progress_callback(100)
         return os.path.exists(output_docx_path)
     except Exception as e:
-        logging.error(f"Error converting PDF to Word with OCR: {e}")
+        logging.error(f"Error in enhanced pdf_to_word: {e}\n{traceback.format_exc()}")
         return False
 
 def md_to_pdf(md_path: str, output_pdf_path: str, progress_callback=None) -> bool:
