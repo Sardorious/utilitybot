@@ -68,7 +68,7 @@ def fetch_transcript(url, temp_dir, progress_callback=None):
     # 2. Fallback: Download audio and use Faster-Whisper
     audio_path = os.path.join(temp_dir, f"{video_id}")
     
-    # yt-dlp options for audio download
+    # yt-dlp options for metadata and audio
     ydl_opts = {
         'format': 'bestaudio/best',
         'outtmpl': audio_path,
@@ -83,9 +83,18 @@ def fetch_transcript(url, temp_dir, progress_callback=None):
 
     try:
         if progress_callback: progress_callback(10)
-        logging.info(f"Downloading audio for STT fallback: {url}")
+        logging.info(f"Checking video metadata for: {url}")
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            # First, check video duration to prevent server overload
+            info_dict = ydl.extract_info(url, download=False)
+            duration = info_dict.get('duration', 0)
+            
+            # Limit: 1.5 hours (90 minutes) for AI transcription
+            if duration > 5400: 
+                return None, "Video juda uzun. AI transkripsiya uchun maksimal davomiylik 1.5 soat (90 daqiqa) qilib belgilangan."
+
+            logging.info(f"Downloading audio for STT fallback (Duration: {duration}s)")
             ydl.download([url])
         
         final_audio_path = audio_path + ".mp3"
@@ -101,18 +110,16 @@ def fetch_transcript(url, temp_dir, progress_callback=None):
         
         # Load model and transcribe
         model = get_whisper_model()
+        # transcribe() segments is a generator
         segments, info = model.transcribe(final_audio_path, beam_size=5)
         
         transcript_data = []
-        # segments is a generator, we need to iterate to get data
         for segment in segments:
             transcript_data.append({
                 'text': segment.text.strip(),
                 'start': segment.start,
                 'duration': segment.end - segment.start
             })
-            # Progress update for long videos (roughly)
-            # info.duration is the total length
             if info.duration > 0 and progress_callback:
                 pct = 30 + (segment.end / info.duration * 65)
                 progress_callback(min(95, pct))

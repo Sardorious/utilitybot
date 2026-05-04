@@ -160,7 +160,15 @@ def process_video(url: str, output_path: str, fmt: str = "mp3", noise_strength: 
     
     with tempfile.TemporaryDirectory() as temp_dir:
         try:
-            # 1. Download
+            # 1. Check duration before downloading
+            with yt_dlp.YoutubeDL({'quiet': True}) as ydl:
+                info = ydl.extract_info(url, download=False)
+                duration = info.get('duration', 0)
+                if duration > 5400: # 1.5 hours
+                    logging.warning(f"Video too long for audio cleaning: {duration}s")
+                    return ""
+
+            # 2. Download
             logging.info(f"Download started for: {url}")
             raw_path = download_audio(url, temp_dir, progress_callback)
             
