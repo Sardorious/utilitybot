@@ -10,3 +10,5 @@ markdown
 xhtml2pdf
 yt-dlp
 pdfplumber
+youtube-transcript-api
+faster-whisper

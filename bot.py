@@ -14,6 +14,8 @@ from utils.converter import word_to_pdf, pdf_to_word, md_to_pdf
 from utils.image import compress_image
 from utils.clean_audio import process_video
 from utils.video import download_video, get_video_info
+from utils.transcript import fetch_transcript, create_transcript_docx, get_video_id
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -122,7 +124,8 @@ async def cmd_start(message: types.Message):
         "3️⃣ PDF hujjatini Word qilib beraman (.pdf yuboring)\n"
         "4️⃣ Rasm o'lchamini kichraytiraman (Rasm yuboring)\n"
         "5️⃣ Markdown hujjatini PDF qilib beraman (.md yuboring)\n"
-        "6️⃣ YouTube videodan audioni yuklab, tozalab beraman (YouTube havola yuboring)\n"
+        "6️⃣ YouTube havolasidan audio yuklash yoki matnga o'girish (Word).\n"
+        "   🌐 Qo'llab-quvvatlanadigan tillar: O'zbek, Rus, Ingliz va Turk tillari.\n"
         "7️⃣ Instagram havoladan videoni yuklab beraman (Instagram havola yuboring)\n\n"
         "Fayl yoki havola yuboring va mos keladigan ishni bajarib beraman!"
     )
@@ -268,45 +271,23 @@ async def handle_text(message: types.Message):
     
     # Check if youtube url
     if re.match(r'^(https?\:\/\/)?(www\.youtube\.com|youtu\.be)\/.+$', text):
-        wait_msg = await message.answer("⏳ YouTube havolasi qabul qilindi. Audio yuklab olinib tozalanishi boshlandi...\nBu jarayon video uzunligiga qarab bir necha daqiqa vaqt olishi mumkin.")
-        
-        output_path = generate_temp_path(".mp3")
-        
-        wait_msg = None
-        try:
-            if process_semaphore.locked():
-                status_msg = await message.answer("⏳ Navbatda turibsiz... Hozirda boshqa vazifa bajarilmoqda.")
+        video_id = get_video_id(text)
+        if not video_id:
+            await message.answer("❌ YouTube videosi ID-sini aniqlab bo'lmadi.")
+            return
 
-            async with process_semaphore:
-                if 'status_msg' in locals(): await status_msg.delete()
-                wait_msg = await message.answer("⏳ YouTube havolasi qabul qilindi. Audio yuklab olinib tozalanishi boshlandi...\nBu jarayon video uzunligiga qarab bir necha daqiqa vaqt olishi mumkin.")
-                
-                logging.info(f"Starting YouTube audio process for user {message.from_user.id}: {text}")
-                
-                progress_callback = get_progress_callback(
-                    wait_msg, 
-                    "YouTube audiosi qayta ishlanmoqda...",
-                    {0: "⬇️ Yuklab olinmoqda...", 30: "⚙️ Tozalanmoqda...", 100: "✅ Tayyorlanmoqda..."}
-                )
-
-                # CPU va vaqt talab qiladigan jarayonni alohida thread'da ishga tushirish
-                final_path = await asyncio.to_thread(process_video, text, output_path, "mp3", 0.6, progress_callback)
-                
-                if final_path and os.path.exists(final_path):
-                    logging.info(f"YouTube success for user {message.from_user.id}")
-                    await wait_msg.edit_text("✅ Audio mufavaqqiyatli tozalab tayyorlandi! Sizga yuborilmoqda...")
-                    result_file = FSInputFile(final_path)
-                    await message.reply_audio(result_file, caption="✅ Orqa fon shovqinlaridan tozalangan audio.")
-                else:
-                    logging.error(f"YouTube process failed for user {message.from_user.id}")
-                    await wait_msg.edit_text("❌ Kechirasiz, audioni tozalashda xatolik yuz berdi.")
+        builder = InlineKeyboardBuilder()
+        builder.row(
+            types.InlineKeyboardButton(text="🎵 Audio yuklash", callback_data=f"yt_audio:{video_id}"),
+            types.InlineKeyboardButton(text="📝 Matnga o'girish (Word)", callback_data=f"yt_text:{video_id}")
+        )
         
-        except Exception as e:
-            logging.error(f"Error handling youtube audio: {e}")
-            if wait_msg: await wait_msg.edit_text("❌ Kechirasiz, audioni qayta ishlashda kutilmagan xatolik yuz berdi.")
-            else: await message.answer("❌ Kechirasiz, kutilmagan xatolik yuz berdi.")
-        finally:
-            clean_up(output_path)
+        await message.answer(
+            "🎬 YouTube videosi aniqlandi.\nNima qilishni xohlaysiz?",
+            reply_markup=builder.as_markup()
+        )
+        return
+            
             
     # Check if instagram url
     elif re.match(r'^(https?\:\/\/)?(www\.)?instagram\.com\/.+$', text):
@@ -357,6 +338,96 @@ async def handle_text(message: types.Message):
             clean_up(output_path)
     else:
         await message.answer("🤷‍♂️ Ushbu xabarni tushunmadim. Iltimos, YouTube yoki Instagram havolasi yuboring.")
+
+@dp.callback_query(F.data.startswith("yt_"))
+async def handle_youtube_callback(callback: types.CallbackQuery):
+    data = callback.data.split(":")
+    action = data[0]
+    video_id = data[1]
+    video_url = f"https://www.youtube.com/watch?v={video_id}"
+    
+    # Acknowledge callback to stop loading spinner
+    await callback.answer()
+    
+    # Use the original message as base for progress updates
+    message = callback.message
+    
+    if action == "yt_audio":
+        output_path = generate_temp_path(".mp3")
+        wait_msg = None
+        try:
+            if process_semaphore.locked():
+                status_msg = await message.answer("⏳ Navbatda turibsiz... Hozirda boshqa vazifa bajarilmoqda.")
+
+            async with process_semaphore:
+                if 'status_msg' in locals(): await status_msg.delete()
+                wait_msg = await message.answer("⏳ YouTube audio yuklanishi boshlandi...\nBu jarayon video uzunligiga qarab bir necha daqiqa vaqt olishi mumkin.")
+                
+                logging.info(f"Starting YouTube audio process for user {callback.from_user.id}: {video_url}")
+                
+                progress_callback = get_progress_callback(
+                    wait_msg, 
+                    "YouTube audiosi qayta ishlanmoqda...",
+                    {0: "⬇️ Yuklab olinmoqda...", 30: "⚙️ Tozalanmoqda...", 100: "✅ Tayyorlanmoqda..."}
+                )
+
+                final_path = await asyncio.to_thread(process_video, video_url, output_path, "mp3", 0.6, progress_callback)
+                
+                if final_path and os.path.exists(final_path):
+                    await wait_msg.edit_text("✅ Audio mufavaqqiyatli tayyorlandi! Sizga yuborilmoqda...")
+                    result_file = FSInputFile(final_path)
+                    await message.reply_audio(result_file, caption="✅ Orqa fon shovqinlaridan tozalangan audio.")
+                else:
+                    await wait_msg.edit_text("❌ Kechirasiz, audioni qayta ishlashda xatolik yuz berdi.")
+        except Exception as e:
+            logging.error(f"Error in yt_audio callback: {e}")
+            await message.answer("❌ Kutilmagan xatolik yuz berdi.")
+        finally:
+            clean_up(output_path)
+            if wait_msg:
+                try: await wait_msg.delete()
+                except: pass
+
+    elif action == "yt_text":
+        output_path = generate_temp_path(".docx")
+        wait_msg = None
+        try:
+            if process_semaphore.locked():
+                status_msg = await message.answer("⏳ Navbatda turibsiz... Hozirda boshqa vazifa bajarilmoqda.")
+
+            async with process_semaphore:
+                if 'status_msg' in locals(): await status_msg.delete()
+                wait_msg = await message.answer("⏳ YouTube transkriptini tayyorlash boshlandi...\nAgar subtitrlar bo'lmasa, AI orqali matnga o'giriladi.")
+                
+                logging.info(f"Starting YouTube transcript for user {callback.from_user.id}: {video_url}")
+                
+                progress_callback = get_progress_callback(
+                    wait_msg, 
+                    "Matnga o'girilmoqda...",
+                    {0: "🔍 Subtitrlar tekshirilmoqda...", 10: "🤖 AI transkripsiya (agar kerak bo'lsa)...", 100: "✅ Tayyorlanmoqda..."}
+                )
+
+                # Fetch transcript (with AI fallback)
+                transcript_data, error = await asyncio.to_thread(fetch_transcript, video_url, TEMP_DIR, progress_callback)
+                
+                if transcript_data:
+                    success = await asyncio.to_thread(create_transcript_docx, transcript_data, output_path)
+                    if success:
+                        await wait_msg.edit_text("✅ Transkript muvaffaqiyatli tayyorlandi! Yuborilmoqda...")
+                        result_file = FSInputFile(output_path)
+                        await message.reply_document(result_file, caption="📝 Video transkripti (Word).")
+                    else:
+                        await wait_msg.edit_text("❌ Word hujjatini yaratishda xatolik yuz berdi.")
+                else:
+                    await wait_msg.edit_text(f"❌ Transkriptni olib bo'lmadi: {error}")
+        except Exception as e:
+            logging.error(f"Error in yt_text callback: {e}")
+            await message.answer("❌ Kutilmagan xatolik yuz berdi.")
+        finally:
+            clean_up(output_path)
+            if wait_msg:
+                try: await wait_msg.delete()
+                except: pass
 
 async def main():
     print("Bot is starting...")
