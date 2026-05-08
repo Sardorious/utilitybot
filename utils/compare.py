@@ -144,9 +144,11 @@ def compare_documents(file1_path: str, file2_path: str, output_html_path: str) -
             fromdesc=f"📝 Original Hujjat", 
             todesc=f"✏️ O'zgartirilgan Hujjat",
             context=True,
-            numlines=0,
-            legend=False
+            numlines=0
         )
+        
+        # Remove the default legend table if it exists
+        html_diff = html_diff.replace('<table class="diff" summary="Legends">', '<table class="diff" style="display:none" summary="Legends">')
         
         # Inject title and container
         html_diff = html_diff.replace('<body>', '<body><div class="diff_container"><h1>📑 Hujjatlar o\'rtasidagi farqlar</h1>')
