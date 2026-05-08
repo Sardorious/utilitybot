@@ -59,14 +59,15 @@ def compare_documents(file1_path: str, file2_path: str, output_html_path: str) -
         font-size: 14px; 
         overflow: hidden; 
     }
-    /* Exact column widths for 4-column side-by-side diff */
-    table.diff col:nth-child(1), table.diff col:nth-child(3) { width: 40px; }
-    table.diff col:nth-child(2), table.diff col:nth-child(4) { width: calc(50% - 40px); }
+    /* difflib side-by-side uses 6 columns: [nav, line, text] x 2 */
+    table.diff col:nth-child(1), table.diff col:nth-child(4) { width: 25px; }
+    table.diff col:nth-child(2), table.diff col:nth-child(5) { width: 45px; }
+    table.diff col:nth-child(3), table.diff col:nth-child(6) { width: calc(50% - 70px); }
     
     table.diff thead { background-color: var(--bg-header); }
     table.diff th { font-weight: 600; padding: 18px; text-align: center; color: #fff; border-bottom: 2px solid var(--border); }
     table.diff td { 
-        padding: 10px 15px; 
+        padding: 10px 12px; 
         border-bottom: 1px solid rgba(255,255,255,0.05); 
         vertical-align: top; 
         white-space: pre-wrap !important; 
@@ -82,7 +83,13 @@ def compare_documents(file1_path: str, file2_path: str, output_html_path: str) -
         font-size: 11px;
         padding: 10px 4px;
         text-align: right;
-        width: 40px !important;
+    }
+    table.diff td.diff_next {
+        width: 25px;
+        background-color: rgba(0,0,0,0.3);
+        text-align: center;
+        font-family: 'Fira Code', monospace;
+        font-size: 10px;
     }
     .diff_add { background-color: var(--add-bg); color: var(--add-text); }
     .diff_sub { background-color: var(--sub-bg); color: var(--sub-text); }
