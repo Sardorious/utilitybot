@@ -70,10 +70,23 @@ def compare_documents(file1_path: str, file2_path: str, output_html_path: str) -
         overflow-wrap: anywhere !important;
     }
     /* Selectors for content columns (2nd and 4th td) */
-    table.diff td:nth-child(2), table.diff td:nth-child(4) { width: 45%; }
+    table.diff td:nth-child(2), table.diff td:nth-child(4) { width: auto; }
     /* Selectors for header columns (1st and 3rd td) */
-    table.diff td:nth-child(1), table.diff td:nth-child(3) { width: 5%; min-width: 45px; }
-    table.diff td.diff_header { background-color: rgba(0,0,0,0.2); color: var(--text-muted); text-align: center; width: 60px; border-right: 1px solid var(--border); user-select: none; font-family: 'Fira Code', monospace; font-size: 13px; }
+    table.diff td:nth-child(1), table.diff td:nth-child(3) { 
+        width: 50px; 
+        min-width: 50px;
+        white-space: nowrap !important;
+        text-align: right;
+    }
+    table.diff td.diff_header { 
+        background-color: rgba(0,0,0,0.2); 
+        color: var(--text-muted); 
+        border-right: 1px solid var(--border); 
+        user-select: none; 
+        font-family: 'Fira Code', monospace; 
+        font-size: 12px;
+        padding: 10px 5px;
+    }
     .diff_add { background-color: var(--add-bg); color: var(--add-text); }
     .diff_sub { background-color: var(--sub-bg); color: var(--sub-text); }
     .diff_chg { background-color: var(--chg-bg); color: var(--chg-text); }
