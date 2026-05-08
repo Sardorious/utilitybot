@@ -8,6 +8,8 @@ from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters import Command
 from aiogram.types import FSInputFile
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 
 from utils.archive import rar_to_zip
 from utils.converter import word_to_pdf, pdf_to_word, md_to_pdf
@@ -15,6 +17,7 @@ from utils.image import compress_image
 from utils.clean_audio import process_video
 from utils.video import download_video, get_video_info
 from utils.transcript import fetch_transcript, create_transcript_docx, get_video_id
+from utils.compare import compare_documents
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 load_dotenv()
@@ -46,6 +49,10 @@ dp = Dispatcher()
 # Temporary directory for processing
 TEMP_DIR = "temp_files"
 os.makedirs(TEMP_DIR, exist_ok=True)
+
+class CompareStates(StatesGroup):
+    waiting_for_first = State()
+    waiting_for_second = State()
 
 def generate_temp_path(extension: str) -> str:
     return os.path.join(TEMP_DIR, f"{uuid.uuid4()}{extension}")
@@ -126,9 +133,15 @@ async def cmd_start(message: types.Message):
         "5️⃣ Markdown hujjatini PDF qilib beraman (.md yuboring)\n"
         "6️⃣ YouTube havolasidan audio yuklash yoki matnga o'girish (Word).\n"
         "   🌐 Qo'llab-quvvatlanadigan tillar: O'zbek, Rus, Ingliz va Turk tillari.\n"
-        "7️⃣ Instagram havoladan videoni yuklab beraman (Instagram havola yuboring)\n\n"
+        "7️⃣ Instagram havoladan videoni yuklab beraman (Instagram havola yuboring)\n"
+        "8️⃣ Ikkita hujjatni taqqoslash (/compare buyrug'ini yuboring)\n\n"
         "Fayl yoki havola yuboring va mos keladigan ishni bajarib beraman!"
     )
+
+@dp.message(Command("compare"))
+async def cmd_compare(message: types.Message, state: FSMContext):
+    await message.answer("🔄 Hujjatlarni taqqoslash rejimi yoqildi.\n\nIltimos, **birinchi hujjatni (Original)** yuboring (.docx, .txt, yoki .md).")
+    await state.set_state(CompareStates.waiting_for_first)
 
 @dp.message(F.photo)
 async def handle_photo(message: types.Message):
@@ -177,10 +190,53 @@ async def handle_photo(message: types.Message):
             except: pass
 
 @dp.message(F.document)
-async def handle_document(message: types.Message):
+async def handle_document(message: types.Message, state: FSMContext):
+    current_state = await state.get_state()
+    
     document = message.document
     file_name = document.file_name.lower()
     extension = os.path.splitext(file_name)[1]
+    
+    if current_state == CompareStates.waiting_for_first.state:
+        if extension not in ['.docx', '.txt', '.md']:
+            await message.answer("❌ Iltimos, birinchi hujjat uchun faqat .docx, .txt yoki .md fayl yuboring.")
+            return
+            
+        file1_path = generate_temp_path(extension)
+        await bot.download(document, destination=file1_path)
+        await state.update_data(file1_path=file1_path)
+        
+        await message.answer("✅ Birinchi fayl qabul qilindi.\nEndi **ikkinchi hujjatni (O'zgartirilgan)** yuboring.")
+        await state.set_state(CompareStates.waiting_for_second)
+        return
+        
+    elif current_state == CompareStates.waiting_for_second.state:
+        if extension not in ['.docx', '.txt', '.md']:
+            await message.answer("❌ Iltimos, ikkinchi hujjat uchun faqat .docx, .txt yoki .md fayl yuboring.")
+            return
+            
+        data = await state.get_data()
+        file1_path = data.get("file1_path")
+        
+        file2_path = generate_temp_path(extension)
+        await bot.download(document, destination=file2_path)
+        
+        output_html = generate_temp_path(".html")
+        wait_msg = await message.answer("⏳ Hujjatlar taqqoslanmoqda...")
+        
+        success = await asyncio.to_thread(compare_documents, file1_path, file2_path, output_html)
+        
+        if success:
+            await wait_msg.edit_text("✅ Taqqoslash muvaffaqiyatli yakunlandi! Natija yuborilmoqda...")
+            result_file = FSInputFile(output_html, filename="farqlar.html")
+            await message.reply_document(result_file, caption="🔍 Hujjatlardagi farqlar (Brauzerda oching).")
+        else:
+            await wait_msg.edit_text("❌ Hujjatlarni taqqoslashda xatolik yuz berdi.")
+            
+        clean_up(file1_path, file2_path, output_html)
+        await state.clear()
+        return
+    
     
     
     # Determine the task
