@@ -31,14 +31,14 @@ table.diff { width: 100%; background: #1e293b; border-radius: 12px; overflow: hi
 table.diff thead { background-color: #334155; border-bottom: 2px solid #475569; }
 table.diff th { font-weight: 600; padding: 16px; text-align: center; color: #f1f5f9; font-size: 16px; width: 50%; }
 table.diff tbody tr:hover { background-color: rgba(255, 255, 255, 0.02); }
-table.diff td { padding: 10px 12px; border-bottom: 1px solid #334155; vertical-align: top; font-family: 'Fira Code', monospace; font-size: 14px; word-wrap: break-word; line-height: 1.5; }
-table.diff td.diff_header { background-color: #0f172a; color: #64748b; text-align: center; width: 40px; border-right: 1px solid #334155; user-select: none; font-size: 12px; font-weight: 500; }
-table.diff td.diff_add { background-color: rgba(16, 185, 129, 0.05); color: #a7f3d0; }
-table.diff td.diff_chg { background-color: rgba(245, 158, 11, 0.05); color: #fde68a; }
-table.diff td.diff_sub { background-color: rgba(239, 68, 68, 0.05); color: #fecaca; }
-span.diff_add { background-color: rgba(16, 185, 129, 0.3); font-weight: 600; border-radius: 3px; padding: 1px 3px; border: 1px solid rgba(16, 185, 129, 0.5); }
-span.diff_sub { background-color: rgba(239, 68, 68, 0.3); text-decoration: line-through; font-weight: 600; border-radius: 3px; padding: 1px 3px; border: 1px solid rgba(239, 68, 68, 0.5); }
-span.diff_chg { background-color: rgba(245, 158, 11, 0.3); font-weight: 600; border-radius: 3px; padding: 1px 3px; border: 1px solid rgba(245, 158, 11, 0.5); }
+table.diff td { padding: 12px 16px; border-bottom: 1px solid #334155; vertical-align: top; font-family: 'Inter', sans-serif; font-size: 15px; white-space: pre-wrap !important; word-break: break-word !important; line-height: 1.6; }
+table.diff td.diff_header { background-color: #0f172a; color: #64748b; text-align: center; width: 50px !important; border-right: 1px solid #334155; user-select: none; font-size: 13px; font-weight: 500; font-family: 'Fira Code', monospace; }
+table.diff td.diff_add { background-color: rgba(16, 185, 129, 0.08); color: #a7f3d0; }
+table.diff td.diff_chg { background-color: rgba(245, 158, 11, 0.08); color: #fde68a; }
+table.diff td.diff_sub { background-color: rgba(239, 68, 68, 0.08); color: #fecaca; }
+span.diff_add { background-color: rgba(16, 185, 129, 0.4); font-weight: 600; border-radius: 4px; padding: 2px 4px; color: #fff; }
+span.diff_sub { background-color: rgba(239, 68, 68, 0.4); text-decoration: line-through; font-weight: 600; border-radius: 4px; padding: 2px 4px; color: #fff; }
+span.diff_chg { background-color: rgba(245, 158, 11, 0.4); font-weight: 600; border-radius: 4px; padding: 2px 4px; color: #fff; }
 </style>
 """
 
@@ -51,7 +51,7 @@ def compare_documents(file1_path: str, file2_path: str, output_html_path: str) -
         lines1 = text1.splitlines()
         lines2 = text2.splitlines()
         
-        differ = difflib.HtmlDiff(wrapcolumn=70)
+        differ = difflib.HtmlDiff()
         differ._styles = CUSTOM_CSS
         
         html_diff = differ.make_file(
