@@ -151,12 +151,13 @@ async def handle_photo(message: types.Message):
     output_path = generate_temp_path("_compressed.jpg")
     
     wait_msg = None
+    status_msg = None
     try:
         if process_semaphore.locked():
             status_msg = await message.answer("⏳ Navbatda turibsiz... Hozirda boshqa vazifa bajarilmoqda.")
         
         async with process_semaphore:
-            if 'status_msg' in locals(): await status_msg.delete()
+            if status_msg: await status_msg.delete()
             wait_msg = await message.answer("⏳ Rasm qabul qilindi. Qayta ishlash boshlandi...")
             
             logging.info(f"Starting photo compression for user {message.from_user.id}")
@@ -254,7 +255,7 @@ async def handle_document(message: types.Message, state: FSMContext):
         task_name = "Markdown to PDF"
         output_ext = ".pdf"
     else:
-        await message.answer("🤷‍♂️ Ushbu fayl turini qo'llab-quvvatlamayman. Iltimos, faqat qo'llab-quvvatlanadigan fayllarni (rar, docx, pdf, md, rasmlar) yuborig.")
+        await message.answer("🤷‍♂️ Ushbu fayl turini qo'llab-quvvatlamayman. Iltimos, faqat qo'llab-quvvatlanadigan fayllarni (rar, docx, pdf, md, rasmlar) yuboring.")
         return
         
     input_path = generate_temp_path(extension)
@@ -262,12 +263,13 @@ async def handle_document(message: types.Message, state: FSMContext):
     output_path = os.path.join(TEMP_DIR, f"{base_name}{output_ext}")
     
     wait_msg = None
+    status_msg = None
     try:
         if process_semaphore.locked():
             status_msg = await message.answer("⏳ Navbatda turibsiz... Hozirda boshqa vazifa bajarilmoqda.")
 
         async with process_semaphore:
-            if 'status_msg' in locals(): await status_msg.delete()
+            if status_msg: await status_msg.delete()
             wait_msg = await message.answer(f"⏳ Fayl qabul qilindi. Jarayon bajarilmoqda: {task_name}...")
             
             logging.info(f"Starting {task_name} for user {message.from_user.id}: {document.file_name}")
@@ -349,12 +351,13 @@ async def handle_text(message: types.Message):
     elif re.match(r'^(https?\:\/\/)?(www\.)?instagram\.com\/.+$', text):
         output_path = generate_temp_path(".mp4")
         wait_msg = None
+        status_msg = None
         try:
             if process_semaphore.locked():
                 status_msg = await message.answer("⏳ Navbatda turibsiz... Hozirda boshqa vazifa bajarilmoqda.")
 
             async with process_semaphore:
-                if 'status_msg' in locals(): await status_msg.delete()
+                if status_msg: await status_msg.delete()
                 wait_msg = await message.answer("⏳ Instagram havolasi qabul qilindi. Video yuklab olinmoqda...")
                 
                 logging.info(f"Starting Instagram video download for user {message.from_user.id}: {text}")
@@ -411,12 +414,13 @@ async def handle_youtube_callback(callback: types.CallbackQuery):
     if action == "yt_audio":
         output_path = generate_temp_path(".mp3")
         wait_msg = None
+        status_msg = None
         try:
             if process_semaphore.locked():
                 status_msg = await message.answer("⏳ Navbatda turibsiz... Hozirda boshqa vazifa bajarilmoqda.")
 
             async with process_semaphore:
-                if 'status_msg' in locals(): await status_msg.delete()
+                if status_msg: await status_msg.delete()
                 wait_msg = await message.answer("⏳ YouTube audio yuklanishi boshlandi...\nBu jarayon video uzunligiga qarab bir necha daqiqa vaqt olishi mumkin.")
                 
                 logging.info(f"Starting YouTube audio process for user {callback.from_user.id}: {video_url}")
@@ -447,12 +451,13 @@ async def handle_youtube_callback(callback: types.CallbackQuery):
     elif action == "yt_text":
         output_path = generate_temp_path(".docx")
         wait_msg = None
+        status_msg = None
         try:
             if process_semaphore.locked():
                 status_msg = await message.answer("⏳ Navbatda turibsiz... Hozirda boshqa vazifa bajarilmoqda.")
 
             async with process_semaphore:
-                if 'status_msg' in locals(): await status_msg.delete()
+                if status_msg: await status_msg.delete()
                 wait_msg = await message.answer("⏳ YouTube transkriptini tayyorlash boshlandi...\nAgar subtitrlar bo'lmasa, AI orqali matnga o'giriladi.")
                 
                 logging.info(f"Starting YouTube transcript for user {callback.from_user.id}: {video_url}")
