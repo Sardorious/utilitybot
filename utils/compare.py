@@ -25,20 +25,105 @@ def extract_text(filepath: str) -> str:
 CUSTOM_CSS = """
 <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style type="text/css">
-body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #f8fafc; margin: 2rem; padding-bottom: 4rem; }
-h1 { text-align: center; font-weight: 600; font-size: 26px; margin-bottom: 2rem; color: #38bdf8; text-transform: uppercase; letter-spacing: 1px; }
-table.diff { width: 100%; background: #1e293b; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3); border-collapse: collapse; table-layout: fixed; }
-table.diff thead { background-color: #334155; border-bottom: 2px solid #475569; }
-table.diff th { font-weight: 600; padding: 16px; text-align: center; color: #f1f5f9; font-size: 16px; width: 50%; }
-table.diff tbody tr:hover { background-color: rgba(255, 255, 255, 0.02); }
-table.diff td { padding: 12px 16px; border-bottom: 1px solid #334155; vertical-align: top; font-family: 'Inter', sans-serif; font-size: 15px; white-space: pre-wrap !important; word-break: break-word !important; line-height: 1.6; }
-table.diff td.diff_header { background-color: #0f172a; color: #64748b; text-align: center; width: 50px !important; border-right: 1px solid #334155; user-select: none; font-size: 13px; font-weight: 500; font-family: 'Fira Code', monospace; }
-table.diff td.diff_add { background-color: rgba(16, 185, 129, 0.08); color: #a7f3d0; }
-table.diff td.diff_chg { background-color: rgba(245, 158, 11, 0.08); color: #fde68a; }
-table.diff td.diff_sub { background-color: rgba(239, 68, 68, 0.08); color: #fecaca; }
-span.diff_add { background-color: rgba(16, 185, 129, 0.4); font-weight: 600; border-radius: 4px; padding: 2px 4px; color: #fff; }
-span.diff_sub { background-color: rgba(239, 68, 68, 0.4); text-decoration: line-through; font-weight: 600; border-radius: 4px; padding: 2px 4px; color: #fff; }
-span.diff_chg { background-color: rgba(245, 158, 11, 0.4); font-weight: 600; border-radius: 4px; padding: 2px 4px; color: #fff; }
+:root {
+    --bg-main: #0f172a;
+    --bg-table: #1e293b;
+    --bg-header: #334155;
+    --border: #475569;
+    --text-main: #f8fafc;
+    --text-muted: #94a3b8;
+    --accent: #38bdf8;
+    
+    --add-bg: rgba(16, 185, 129, 0.15);
+    --add-text: #6ee7b7;
+    --add-hl: rgba(16, 185, 129, 0.4);
+    
+    --sub-bg: rgba(239, 68, 68, 0.15);
+    --sub-text: #fca5a5;
+    --sub-hl: rgba(239, 68, 68, 0.4);
+    
+    --chg-bg: rgba(245, 158, 11, 0.15);
+    --chg-text: #fde68a;
+    --chg-hl: rgba(245, 158, 11, 0.4);
+}
+
+body { 
+    font-family: 'Inter', sans-serif; 
+    background-color: var(--bg-main); 
+    color: var(--text-main); 
+    margin: 0; 
+    padding: 2rem; 
+    line-height: 1.5;
+}
+
+h1 { 
+    text-align: center; 
+    font-weight: 700; 
+    font-size: 28px; 
+    margin-bottom: 2rem; 
+    color: var(--accent);
+    text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+.diff_container {
+    max-width: 98%;
+    margin: 0 auto;
+}
+
+table.diff { 
+    width: 100%; 
+    background: var(--bg-table); 
+    border-radius: 12px; 
+    border-collapse: collapse; 
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
+    font-size: 15px;
+    overflow: visible;
+}
+
+table.diff thead { 
+    background-color: var(--bg-header); 
+}
+
+table.diff th { 
+    font-weight: 600; 
+    padding: 18px; 
+    text-align: center; 
+    color: #fff; 
+    border-bottom: 2px solid var(--border);
+}
+
+table.diff td { 
+    padding: 10px 15px; 
+    border-bottom: 1px solid rgba(255,255,255,0.05); 
+    vertical-align: top; 
+    white-space: pre-wrap !important; 
+    word-break: break-word !important; 
+    overflow-wrap: anywhere !important;
+}
+
+table.diff td.diff_header { 
+    background-color: rgba(0,0,0,0.2); 
+    color: var(--text-muted); 
+    text-align: center; 
+    width: 60px; 
+    border-right: 1px solid var(--border); 
+    user-select: none; 
+    font-family: 'Fira Code', monospace; 
+    font-size: 13px;
+}
+
+/* Row states */
+.diff_add { background-color: var(--add-bg); color: var(--add-text); }
+.diff_sub { background-color: var(--sub-bg); color: var(--sub-text); }
+.diff_chg { background-color: var(--chg-bg); color: var(--chg-text); }
+
+/* Intra-line highlighting */
+span.diff_add { background-color: var(--add-hl); color: #fff; font-weight: 600; border-radius: 3px; padding: 0 3px; border-bottom: 2px solid #10b981; }
+span.diff_sub { background-color: var(--sub-hl); color: #fff; text-decoration: line-through; font-weight: 600; border-radius: 3px; padding: 0 3px; border-bottom: 2px solid #ef4444; }
+span.diff_chg { background-color: var(--chg-hl); color: #fff; font-weight: 600; border-radius: 3px; padding: 0 3px; border-bottom: 2px solid #f59e0b; }
+
+/* Links and utility */
+a { color: var(--accent); text-decoration: none; }
 </style>
 """
 
@@ -59,10 +144,13 @@ def compare_documents(file1_path: str, file2_path: str, output_html_path: str) -
             fromdesc=f"📝 Original Hujjat", 
             todesc=f"✏️ O'zgartirilgan Hujjat",
             context=True,
-            numlines=0
+            numlines=0,
+            legend=False
         )
         
-        html_diff = html_diff.replace('<body>', '<body><h1>📑 Hujjatlar o\'rtasidagi farqlar</h1>')
+        # Inject title and container
+        html_diff = html_diff.replace('<body>', '<body><div class="diff_container"><h1>📑 Hujjatlar o\'rtasidagi farqlar</h1>')
+        html_diff = html_diff.replace('</body>', '</div></body>')
         
         with open(output_html_path, 'w', encoding='utf-8') as f:
             f.write(html_diff)
