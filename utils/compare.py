@@ -26,8 +26,6 @@ def compare_documents(file1_path: str, file2_path: str, output_html_path: str) -
     """Compares two documents and generates an HTML diff file."""
     # Custom CSS moved inside function to potentially help with IDE linter noise
     css_styles = """
-    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-    <style type="text/css">
     :root {
         --bg-main: #0f172a;
         --bg-table: #1e293b;
@@ -60,9 +58,10 @@ def compare_documents(file1_path: str, file2_path: str, output_html_path: str) -
         overflow: hidden; 
     }
     /* difflib side-by-side uses 6 columns: [nav, line, text] x 2 */
-    table.diff col:nth-child(1), table.diff col:nth-child(4) { width: 25px; }
-    table.diff col:nth-child(2), table.diff col:nth-child(5) { width: 45px; }
-    table.diff col:nth-child(3), table.diff col:nth-child(6) { width: calc(50% - 70px); }
+    /* Targeting colgroup because difflib doesn't generate <col> tags */
+    table.diff colgroup:nth-child(1), table.diff colgroup:nth-child(4) { width: 30px !important; }
+    table.diff colgroup:nth-child(2), table.diff colgroup:nth-child(5) { width: 50px !important; }
+    table.diff colgroup:nth-child(3), table.diff colgroup:nth-child(6) { width: auto !important; }
     
     table.diff thead { background-color: var(--bg-header); }
     table.diff th { font-weight: 600; padding: 18px; text-align: center; color: #fff; border-bottom: 2px solid var(--border); }
@@ -85,7 +84,7 @@ def compare_documents(file1_path: str, file2_path: str, output_html_path: str) -
         text-align: right;
     }
     table.diff td.diff_next {
-        width: 25px;
+        width: 30px;
         background-color: rgba(0,0,0,0.3);
         text-align: center;
         font-family: 'Fira Code', monospace;
@@ -98,7 +97,6 @@ def compare_documents(file1_path: str, file2_path: str, output_html_path: str) -
     span.diff_sub { background-color: var(--sub-hl); color: #fff; text-decoration: line-through; font-weight: 600; border-radius: 3px; padding: 0 3px; border-bottom: 2px solid #ef4444; }
     span.diff_chg { background-color: var(--chg-hl); color: #fff; font-weight: 600; border-radius: 3px; padding: 0 3px; border-bottom: 2px solid #f59e0b; }
     a { color: var(--accent); text-decoration: none; }
-    </style>
     """
     
     try:
@@ -114,7 +112,7 @@ def compare_documents(file1_path: str, file2_path: str, output_html_path: str) -
         lines2 = text2.splitlines()
         
         differ = difflib.HtmlDiff()
-        # Set custom styles
+        # Set custom styles (excluding <style> tag because make_file adds it)
         differ._styles = css_styles
         
         html_diff = differ.make_file(
@@ -124,8 +122,15 @@ def compare_documents(file1_path: str, file2_path: str, output_html_path: str) -
             context=False
         )
         
+        # Add the Google Fonts link separately
+        font_link = '<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">'
+        html_diff = html_diff.replace('</head>', f'{font_link}\n</head>')
+        
         # Remove the default legend table if it exists
         html_diff = html_diff.replace('<table class="diff" summary="Legends">', '<table class="diff" style="display:none" summary="Legends">')
+        
+        # Force text wrapping by removing 'nowrap' attributes
+        html_diff = html_diff.replace('nowrap="nowrap"', '')
         
         # Inject title and container
         html_diff = html_diff.replace('<body>', '<body><div class="diff_container"><h1>📑 Hujjatlar o\'rtasidagi farqlar</h1>')
