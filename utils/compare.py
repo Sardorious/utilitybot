@@ -70,11 +70,10 @@ def compare_documents(file1_path: str, file2_path: str, output_html_path: str) -
         overflow-wrap: anywhere !important;
     }
     /* Selectors for content columns (2nd and 4th td) */
-    table.diff td:nth-child(2), table.diff td:nth-child(4) { width: auto; }
+    table.diff td:nth-child(2), table.diff td:nth-child(4) { width: 49%; }
     /* Selectors for header columns (1st and 3rd td) */
     table.diff td:nth-child(1), table.diff td:nth-child(3) { 
-        width: 50px; 
-        min-width: 50px;
+        width: 1%; 
         white-space: nowrap !important;
         text-align: right;
     }
@@ -85,7 +84,7 @@ def compare_documents(file1_path: str, file2_path: str, output_html_path: str) -
         user-select: none; 
         font-family: 'Fira Code', monospace; 
         font-size: 12px;
-        padding: 10px 5px;
+        padding: 10px 8px;
     }
     .diff_add { background-color: var(--add-bg); color: var(--add-text); }
     .diff_sub { background-color: var(--sub-bg); color: var(--sub-text); }
